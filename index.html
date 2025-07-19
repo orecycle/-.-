@@ -1,1620 +1,1666 @@
-import React, { useState, useEffect, createContext, useContext } from 'react';
-import { initializeApp } from 'firebase/app';
-import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from 'firebase/auth';
-import { getFirestore, collection, addDoc, onSnapshot, query, orderBy, doc, updateDoc, deleteDoc } from 'firebase/firestore';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-
-// Create a context for Firebase and user data
-const AppContext = createContext(null);
-
-// Custom hook to use the app context
-const useAppContext = () => {
-  return useContext(AppContext);
-};
-
-// Main App Component
-function App() {
-  const [db, setDb] = useState(null);
-  const [auth, setAuth] = useState(null);
-  const [userId, setUserId] = useState(null);
-  const [isAuthReady, setIsAuthReady] = useState(false);
-  // Updated currentView state to include 'others'
-  const [currentView, setCurrentView] = useState('dashboard'); // 'dashboard', 'transactions', 'others', 'reports'
-
-  useEffect(() => {
-    // Initialize Firebase
-    const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-    const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
-
-    try {
-      const app = initializeApp(firebaseConfig);
-      const firestoreDb = getFirestore(app);
-      const firebaseAuth = getAuth(app);
-
-      setDb(firestoreDb);
-      setAuth(firebaseAuth);
-
-      // Listen for auth state changes
-      const unsubscribe = onAuthStateChanged(firebaseAuth, async (user) => {
-        if (user) {
-          setUserId(user.uid);
-        } else {
-          // Sign in anonymously if no user is logged in and no custom token is provided
-          if (typeof __initial_auth_token === 'undefined') {
-            await signInAnonymously(firebaseAuth);
-          }
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ระบบบริหารการเงิน ห้างหุ้นส่วนจำกัด โอรีไซเคิล</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Inter Font -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
         }
-        setIsAuthReady(true);
-      });
+        /* Custom styles for better aesthetics if needed */
+        .shadow-lg {
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+        }
+        .rounded-xl {
+            border-radius: 0.75rem;
+        }
+        .bg-gradient-to-br {
+            background-image: linear-gradient(to bottom right, var(--tw-gradient-stops));
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
 
-      // Use the initial auth token if available
-      if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-        signInWithCustomToken(firebaseAuth, __initial_auth_token)
-          .catch((error) => {
-            console.error("Error signing in with custom token:", error);
-            // Fallback to anonymous sign-in if custom token fails
-            signInAnonymously(firebaseAuth).catch(console.error);
-          });
-      }
+    <!-- React CDN -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <!-- Babel for JSX transformation in browser (for development only) -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <!-- Recharts CDN -->
+    <script src="https://unpkg.com/recharts/umd/Recharts.min.js"></script>
 
-      return () => unsubscribe();
-    } catch (error) {
-      console.error("Error initializing Firebase:", error);
-    }
-  }, []);
+    <!-- Firebase SDKs -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, addDoc, onSnapshot, query, orderBy, doc, updateDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-  const appState = { db, auth, userId, isAuthReady };
+        // Define global variables for Firebase config and app ID
+        // IMPORTANT: Replace 'default-app-id' and the firebaseConfig object with your actual Firebase project details
+        // These values are typically provided by the Canvas environment in a real scenario.
+        window.__app_id = 'default-finance-app';
+        window.__firebase_config = JSON.stringify({
+            apiKey: "YOUR_API_KEY", // Replace with your Firebase API Key
+            authDomain: "YOUR_PROJECT_ID.firebaseapp.com", // Replace with your Firebase Auth Domain
+            projectId: "YOUR_PROJECT_ID", // Replace with your Firebase Project ID
+            storageBucket: "YOUR_PROJECT_ID.appspot.com", // Replace with your Firebase Storage Bucket
+            messagingSenderId: "YOUR_MESSAGING_SENDER_ID", // Replace with your Firebase Messaging Sender ID
+            appId: "YOUR_APP_ID" // Replace with your Firebase App ID
+        });
+        window.__initial_auth_token = undefined; // This token is usually provided by the Canvas environment
 
-  return (
-    <AppContext.Provider value={appState}>
-      <div className="min-h-screen bg-gradient-to-br from-blue-100 to-blue-300 font-sans text-gray-800">
-        <header className="bg-blue-800 shadow-lg p-4 text-white">
-          <div className="container mx-auto flex justify-between items-center">
-            <h1 className="text-3xl font-bold text-blue-100">
-              <span className="text-blue-300">โอรีไซเคิล</span> | ระบบบริหารการเงิน
-            </h1>
-            <nav>
-              <ul className="flex space-x-6">
-                <li>
-                  <button
-                    onClick={() => setCurrentView('dashboard')}
-                    className={`px-4 py-2 rounded-lg font-semibold transition-all duration-300 ${
-                      currentView === 'dashboard' ? 'bg-blue-600 text-white shadow-md' : 'text-blue-200 hover:text-white hover:bg-blue-700'
-                    }`}
-                  >
-                    แดชบอร์ด
-                  </button>
-                </li>
-                <li>
-                  <button
-                    onClick={() => setCurrentView('transactions')}
-                    className={`px-4 py-2 rounded-lg font-semibold transition-all duration-300 ${
-                      currentView === 'transactions' ? 'bg-blue-600 text-white shadow-md' : 'text-blue-200 hover:text-white hover:bg-blue-700'
-                    }`}
-                  >
-                    รายการบัญชี
-                  </button>
-                </li>
-                {/* Combined Categories and Accounts into 'Others' */}
-                <li>
-                  <button
-                    onClick={() => setCurrentView('others')}
-                    className={`px-4 py-2 rounded-lg font-semibold transition-all duration-300 ${
-                      currentView === 'others' ? 'bg-blue-600 text-white shadow-md' : 'text-blue-200 hover:text-white hover:bg-blue-700'
-                    }`}
-                  >
-                    อื่นๆ
-                  </button>
-                </li>
-                <li>
-                  <button
-                    onClick={() => setCurrentView('reports')}
-                    className={`px-4 py-2 rounded-lg font-semibold transition-all duration-300 ${
-                      currentView === 'reports' ? 'bg-blue-600 text-white shadow-md' : 'text-blue-200 hover:text-white hover:bg-blue-700'
-                    }`}
-                  >
-                    รายงาน
-                  </button>
-                </li>
-              </ul>
-            </nav>
-          </div>
-        </header>
+        // Expose Firebase functions globally for the React script
+        window.firebase = {
+            initializeApp,
+            getAuth,
+            signInAnonymously,
+            signInWithCustomToken,
+            onAuthStateChanged,
+            getFirestore,
+            collection,
+            addDoc,
+            onSnapshot,
+            query,
+            orderBy,
+            doc,
+            updateDoc,
+            deleteDoc
+        };
+    </script>
 
-        <main className="container mx-auto p-6">
-          {isAuthReady ? (
-            <>
-              {userId && (
-                <div className="bg-blue-50 border border-blue-200 text-blue-700 px-4 py-3 rounded-lg mb-6 shadow-sm">
-                  <p className="font-medium">ผู้ใช้งานปัจจุบัน (User ID): <span className="font-mono text-sm break-all">{userId}</span></p>
+    <script type="text/babel">
+        // Access Firebase functions from the global window object
+        const { initializeApp, getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged,
+                getFirestore, collection, addDoc, onSnapshot, query, orderBy, doc, updateDoc, deleteDoc } = window.firebase;
+
+        // Create a context for Firebase and user data
+        const AppContext = React.createContext(null);
+
+        // Custom hook to use the app context
+        const useAppContext = () => {
+            return React.useContext(AppContext);
+        };
+
+        // Main App Component
+        function App() {
+            const [db, setDb] = React.useState(null);
+            const [auth, setAuth] = React.useState(null);
+            const [userId, setUserId] = React.useState(null);
+            const [isAuthReady, setIsAuthReady] = React.useState(false);
+            const [currentView, setCurrentView] = React.useState('dashboard'); // 'dashboard', 'transactions', 'others', 'reports'
+
+            React.useEffect(() => {
+                const appId = typeof window.__app_id !== 'undefined' ? window.__app_id : 'default-app-id';
+                const firebaseConfig = typeof window.__firebase_config !== 'undefined' ? JSON.parse(window.__firebase_config) : {};
+
+                try {
+                    const app = initializeApp(firebaseConfig);
+                    const firestoreDb = getFirestore(app);
+                    const firebaseAuth = getAuth(app);
+
+                    setDb(firestoreDb);
+                    setAuth(firebaseAuth);
+
+                    const unsubscribe = onAuthStateChanged(firebaseAuth, async (user) => {
+                        if (user) {
+                            setUserId(user.uid);
+                        } else {
+                            if (typeof window.__initial_auth_token === 'undefined') {
+                                await signInAnonymously(firebaseAuth);
+                            }
+                        }
+                        setIsAuthReady(true);
+                    });
+
+                    if (typeof window.__initial_auth_token !== 'undefined' && window.__initial_auth_token) {
+                        signInWithCustomToken(firebaseAuth, window.__initial_auth_token)
+                            .catch((error) => {
+                                console.error("Error signing in with custom token:", error);
+                                signInAnonymously(firebaseAuth).catch(console.error);
+                            });
+                    }
+
+                    return () => unsubscribe();
+                } catch (error) {
+                    console.error("Error initializing Firebase:", error);
+                }
+            }, []);
+
+            const appState = { db, auth, userId, isAuthReady };
+
+            return (
+                <AppContext.Provider value={appState}>
+                    <div className="min-h-screen bg-gradient-to-br from-blue-100 to-blue-300 font-sans text-gray-800">
+                        <header className="bg-blue-800 shadow-lg p-4 text-white">
+                            <div className="container mx-auto flex justify-between items-center">
+                                <h1 className="text-3xl font-bold text-blue-100">
+                                    <span className="text-blue-300">โอรีไซเคิล</span> | ระบบบริหารการเงิน
+                                </h1>
+                                <nav>
+                                    <ul className="flex space-x-6">
+                                        <li>
+                                            <button
+                                                onClick={() => setCurrentView('dashboard')}
+                                                className={`px-4 py-2 rounded-lg font-semibold transition-all duration-300 ${
+                                                    currentView === 'dashboard' ? 'bg-blue-600 text-white shadow-md' : 'text-blue-200 hover:text-white hover:bg-blue-700'
+                                                }`}
+                                            >
+                                                แดชบอร์ด
+                                            </button>
+                                        </li>
+                                        <li>
+                                            <button
+                                                onClick={() => setCurrentView('transactions')}
+                                                className={`px-4 py-2 rounded-lg font-semibold transition-all duration-300 ${
+                                                    currentView === 'transactions' ? 'bg-blue-600 text-white shadow-md' : 'text-blue-200 hover:text-white hover:bg-blue-700'
+                                                }`}
+                                            >
+                                                รายการบัญชี
+                                            </button>
+                                        </li>
+                                        <li>
+                                            <button
+                                                onClick={() => setCurrentView('others')}
+                                                className={`px-4 py-2 rounded-lg font-semibold transition-all duration-300 ${
+                                                    currentView === 'others' ? 'bg-blue-600 text-white shadow-md' : 'text-blue-200 hover:text-white hover:bg-blue-700'
+                                                }`}
+                                            >
+                                                อื่นๆ
+                                            </button>
+                                        </li>
+                                        <li>
+                                            <button
+                                                onClick={() => setCurrentView('reports')}
+                                                className={`px-4 py-2 rounded-lg font-semibold transition-all duration-300 ${
+                                                    currentView === 'reports' ? 'bg-blue-600 text-white shadow-md' : 'text-blue-200 hover:text-white hover:bg-blue-700'
+                                                }`}
+                                            >
+                                                รายงาน
+                                            </button>
+                                        </li>
+                                    </ul>
+                                </nav>
+                            </div>
+                        </header>
+
+                        <main className="container mx-auto p-6">
+                            {isAuthReady ? (
+                                <>
+                                    {userId && (
+                                        <div className="bg-blue-50 border border-blue-200 text-blue-700 px-4 py-3 rounded-lg mb-6 shadow-sm">
+                                            <p className="font-medium">ผู้ใช้งานปัจจุบัน (User ID): <span className="font-mono text-sm break-all">{userId}</span></p>
+                                        </div>
+                                    )}
+
+                                    {currentView === 'dashboard' && <Dashboard />}
+                                    {currentView === 'transactions' && <Transactions />}
+                                    {currentView === 'others' && <Others />}
+                                    {currentView === 'reports' && <Reports />}
+                                </>
+                            ) : (
+                                <div className="flex justify-center items-center h-64">
+                                    <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-blue-500"></div>
+                                    <p className="ml-4 text-lg text-blue-700">กำลังโหลด...</p>
+                                </div>
+                            )}
+                        </main>
+                    </div>
+                </AppContext.Provider>
+            );
+        }
+
+        // Dashboard Component
+        function Dashboard() {
+            const { db, userId, isAuthReady } = useAppContext();
+            const [transactions, setTransactions] = React.useState([]);
+            const [balance, setBalance] = React.useState(0);
+            const [dailySummary, setDailySummary] = React.useState({ income: 0, expense: 0 });
+            const [monthlySummary, setMonthlySummary] = React.useState({ income: 0, expense: 0 });
+
+            React.useEffect(() => {
+                if (db && userId && isAuthReady) {
+                    const q = query(collection(db, `artifacts/${window.__app_id}/users/${userId}/transactions`), orderBy('date', 'desc'));
+                    const unsubscribe = onSnapshot(q, (snapshot) => {
+                        const fetchedTransactions = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                        setTransactions(fetchedTransactions);
+                        calculateSummaries(fetchedTransactions);
+                    }, (error) => {
+                        console.error("Error fetching transactions for dashboard:", error);
+                    });
+                    return () => unsubscribe();
+                }
+            }, [db, userId, isAuthReady]);
+
+            const calculateSummaries = (txns) => {
+                let currentBalance = 0;
+                let todayIncome = 0;
+                let todayExpense = 0;
+                let thisMonthIncome = 0;
+                let thisMonthExpense = 0;
+
+                const today = new Date().toISOString().slice(0, 10);
+                const thisMonth = new Date().toISOString().slice(0, 7); // YYYY-MM
+
+                txns.forEach(txn => {
+                    const amount = parseFloat(txn.amount);
+                    if (txn.type === 'income') {
+                        currentBalance += amount;
+                        if (txn.date === today) todayIncome += amount;
+                        if (txn.date.startsWith(thisMonth)) thisMonthIncome += amount;
+                    } else {
+                        currentBalance -= amount;
+                        if (txn.date === today) todayExpense += amount;
+                        if (txn.date.startsWith(thisMonth)) thisMonthExpense += amount;
+                    }
+                });
+
+                setBalance(currentBalance);
+                setDailySummary({ income: todayIncome, expense: todayExpense });
+                setMonthlySummary({ income: thisMonthIncome, expense: thisMonthExpense });
+            };
+
+            return (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    <div className="bg-white p-6 rounded-xl shadow-lg border border-blue-200">
+                        <h2 className="text-2xl font-bold text-blue-700 mb-4">ยอดเงินคงเหลือ</h2>
+                        <p className="text-4xl font-extrabold text-green-600">
+                            {balance.toLocaleString('th-TH', { style: 'currency', currency: 'THB' })}
+                        </p>
+                    </div>
+
+                    <div className="bg-white p-6 rounded-xl shadow-lg border border-blue-200">
+                        <h2 className="text-2xl font-bold text-blue-700 mb-4">สรุปรายวัน</h2>
+                        <p className="text-xl text-green-600 mb-2">รายรับ: {dailySummary.income.toLocaleString('th-TH', { style: 'currency', currency: 'THB' })}</p>
+                        <p className="text-xl text-red-600">รายจ่าย: {dailySummary.expense.toLocaleString('th-TH', { style: 'currency', currency: 'THB' })}</p>
+                    </div>
+
+                    <div className="bg-white p-6 rounded-xl shadow-lg border border-blue-200">
+                        <h2 className="text-2xl font-bold text-blue-700 mb-4">สรุปรายเดือน</h2>
+                        <p className="text-xl text-green-600 mb-2">รายรับ: {monthlySummary.income.toLocaleString('th-TH', { style: 'currency', currency: 'THB' })}</p>
+                        <p className="text-xl text-red-600">รายจ่าย: {monthlySummary.expense.toLocaleString('th-TH', { style: 'currency', currency: 'THB' })}</p>
+                    </div>
+
+                    <div className="lg:col-span-3 bg-white p-6 rounded-xl shadow-lg border border-blue-200">
+                        <h2 className="text-2xl font-bold text-blue-700 mb-4">รายการล่าสุด</h2>
+                        {transactions.length > 0 ? (
+                            <ul className="space-y-3">
+                                {transactions.slice(0, 5).map(txn => (
+                                    <li key={txn.id} className="flex justify-between items-center p-3 bg-blue-50 rounded-lg shadow-sm">
+                                        <div>
+                                            <p className="font-semibold text-lg">{txn.description}</p>
+                                            <p className="text-sm text-gray-600">{txn.date} | {txn.category}</p>
+                                        </div>
+                                        <p className={`font-bold text-xl ${txn.type === 'income' ? 'text-green-600' : 'text-red-600'}`}>
+                                            {txn.type === 'expense' && '- '}
+                                            {parseFloat(txn.amount).toLocaleString('th-TH', { style: 'currency', currency: 'THB' })}
+                                        </p>
+                                    </li>
+                                ))}
+                            </ul>
+                        ) : (
+                            <p className="text-gray-500">ไม่มีรายการล่าสุด</p>
+                        )}
+                    </div>
                 </div>
-              )}
+            );
+        }
 
-              {currentView === 'dashboard' && <Dashboard />}
-              {currentView === 'transactions' && <Transactions />}
-              {/* Render the new Others component */}
-              {currentView === 'others' && <Others />}
-              {currentView === 'reports' && <Reports />}
-            </>
-          ) : (
-            <div className="flex justify-center items-center h-64">
-              <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-blue-500"></div>
-              <p className="ml-4 text-lg text-blue-700">กำลังโหลด...</p>
-            </div>
-          )}
-        </main>
-      </div>
-    </AppContext.Provider>
-  );
-}
+        // Transaction Form Component
+        function TransactionForm({ categories, onSave, initialData }) {
+            const [date, setDate] = React.useState('');
+            const [type, setType] = React.useState('expense'); // 'income' or 'expense'
+            const [category, setCategory] = React.useState('');
+            const [description, setDescription] = React.useState('');
+            const [amount, setAmount] = React.useState('');
+            const [paymentMethod, setPaymentMethod] = React.useState('');
+            const [attachment, setAttachment] = React.useState(null); // File object
+            const [attachmentName, setAttachmentName] = React.useState(''); // Name for display
+            // New fields for more detailed transactions
+            const [referenceNo, setReferenceNo] = React.useState(''); // เลขที่อ้างอิง/ใบเสร็จ
+            const [payeePayer, setPayeePayer] = React.useState(''); // ผู้รับ/ผู้จ่าย
+            const [notes, setNotes] = React.useState(''); // หมายเหตุเพิ่มเติม
 
-// Dashboard Component
-function Dashboard() {
-  const { db, userId, isAuthReady } = useAppContext();
-  const [transactions, setTransactions] = useState([]);
-  const [balance, setBalance] = useState(0);
-  const [dailySummary, setDailySummary] = useState({ income: 0, expense: 0 });
-  const [monthlySummary, setMonthlySummary] = useState({ income: 0, expense: 0 });
+            const [message, setMessage] = React.useState({ text: '', type: '' }); // 'success' or 'error'
 
-  useEffect(() => {
-    if (db && userId && isAuthReady) {
-      const q = query(collection(db, `artifacts/${__app_id}/users/${userId}/transactions`), orderBy('date', 'desc'));
-      const unsubscribe = onSnapshot(q, (snapshot) => {
-        const fetchedTransactions = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        setTransactions(fetchedTransactions);
-        calculateSummaries(fetchedTransactions);
-      }, (error) => {
-        console.error("Error fetching transactions for dashboard:", error);
-      });
-      return () => unsubscribe();
-    }
-  }, [db, userId, isAuthReady]);
+            React.useEffect(() => {
+                // Populate form if initialData is provided (for editing)
+                if (initialData) {
+                    setDate(initialData.date);
+                    setType(initialData.type);
+                    setCategory(initialData.category);
+                    setDescription(initialData.description);
+                    setAmount(initialData.amount.toString());
+                    setPaymentMethod(initialData.paymentMethod);
+                    setAttachmentName(initialData.attachment || ''); // Display existing attachment name
+                    setReferenceNo(initialData.referenceNo || '');
+                    setPayeePayer(initialData.payeePayer || '');
+                    setNotes(initialData.notes || '');
+                } else {
+                    // Reset form for new entry
+                    setDate('');
+                    setType('expense');
+                    setDescription('');
+                    setAmount('');
+                    setPaymentMethod('');
+                    setAttachment(null);
+                    setAttachmentName('');
+                    setReferenceNo('');
+                    setPayeePayer('');
+                    setNotes('');
+                }
+                // Set default category if categories are loaded and no initialData or category is set
+                if (categories.length > 0 && !category && !initialData) {
+                    setCategory(categories[0].name);
+                } else if (initialData && !categories.some(cat => cat.name === initialData.category)) {
+                    // If editing and category no longer exists, reset to first available
+                    setCategory(categories.length > 0 ? categories[0].name : '');
+                }
+            }, [initialData, categories]);
 
-  const calculateSummaries = (txns) => {
-    let currentBalance = 0;
-    let todayIncome = 0;
-    let todayExpense = 0;
-    let thisMonthIncome = 0;
-    let thisMonthExpense = 0;
+            const handleSubmit = async (e) => {
+                e.preventDefault();
+                setMessage({ text: '', type: '' });
 
-    const today = new Date().toISOString().slice(0, 10);
-    const thisMonth = new Date().toISOString().slice(0, 7); // YYYY-MM
+                if (!date || !category || !description || !amount || !paymentMethod) {
+                    setMessage({ text: 'กรุณากรอกข้อมูลที่จำเป็นให้ครบถ้วน', type: 'error' });
+                    return;
+                }
+                if (isNaN(parseFloat(amount)) || parseFloat(amount) <= 0) {
+                    setMessage({ text: 'จำนวนเงินไม่ถูกต้อง', type: 'error' });
+                    return;
+                }
 
-    txns.forEach(txn => {
-      const amount = parseFloat(txn.amount);
-      if (txn.type === 'income') {
-        currentBalance += amount;
-        if (txn.date === today) todayIncome += amount;
-        if (txn.date.startsWith(thisMonth)) thisMonthIncome += amount;
-      } else {
-        currentBalance -= amount;
-        if (txn.date === today) todayExpense += amount;
-        if (txn.date.startsWith(thisMonth)) thisMonthExpense += amount;
-      }
-    });
+                const transactionData = {
+                    date,
+                    type,
+                    category,
+                    description,
+                    amount: parseFloat(amount),
+                    paymentMethod,
+                    attachment: attachmentName, // Store the name, actual file upload is separate
+                    referenceNo, // New field
+                    payeePayer,  // New field
+                    notes,       // New field
+                    createdAt: initialData ? initialData.createdAt : new Date().toISOString(), // Preserve original creation date if editing
+                };
 
-    setBalance(currentBalance);
-    setDailySummary({ income: todayIncome, expense: todayExpense });
-    setMonthlySummary({ income: thisMonthIncome, expense: thisMonthExpense });
-  };
+                try {
+                    await onSave(transactionData);
+                    setMessage({ text: 'บันทึกรายการสำเร็จ!', type: 'success' });
+                    // Clear form only if adding new transaction
+                    if (!initialData) {
+                        setDate('');
+                        setType('expense');
+                        setCategory(categories.length > 0 ? categories[0].name : '');
+                        setDescription('');
+                        setAmount('');
+                        setPaymentMethod('');
+                        setAttachment(null);
+                        setAttachmentName('');
+                        setReferenceNo('');
+                        setPayeePayer('');
+                        setNotes('');
+                    }
+                } catch (error) {
+                    console.error("Error saving transaction:", error);
+                    setMessage({ text: 'เกิดข้อผิดพลาดในการบันทึกรายการ', type: 'error' });
+                }
+            };
 
-  return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-      <div className="bg-white p-6 rounded-xl shadow-lg border border-blue-200">
-        <h2 className="text-2xl font-bold text-blue-700 mb-4">ยอดเงินคงเหลือ</h2>
-        <p className="text-4xl font-extrabold text-green-600">
-          {balance.toLocaleString('th-TH', { style: 'currency', currency: 'THB' })}
-        </p>
-      </div>
+            const handleFileChange = (e) => {
+                const file = e.target.files[0];
+                if (file) {
+                    setAttachment(file);
+                    setAttachmentName(file.name);
+                    console.log("File selected:", file.name);
+                } else {
+                    setAttachment(null);
+                    setAttachmentName('');
+                }
+            };
 
-      <div className="bg-white p-6 rounded-xl shadow-lg border border-blue-200">
-        <h2 className="text-2xl font-bold text-blue-700 mb-4">สรุปรายวัน</h2>
-        <p className="text-xl text-green-600 mb-2">รายรับ: {dailySummary.income.toLocaleString('th-TH', { style: 'currency', currency: 'THB' })}</p>
-        <p className="text-xl text-red-600">รายจ่าย: {dailySummary.expense.toLocaleString('th-TH', { style: 'currency', currency: 'THB' })}</p>
-      </div>
+            return (
+                <div className="bg-white p-6 rounded-xl shadow-lg border border-blue-200 mb-6">
+                    <h2 className="text-2xl font-bold text-blue-700 mb-4">{initialData ? 'แก้ไขรายการบัญชี' : 'เพิ่มรายการบัญชีใหม่'}</h2>
+                    <form onSubmit={handleSubmit} className="space-y-4">
+                        <div>
+                            <label htmlFor="date" className="block text-sm font-medium text-gray-700 mb-1">วันที่ทำรายการ</label>
+                            <input
+                                type="date"
+                                id="date"
+                                value={date}
+                                onChange={(e) => setDate(e.target.value)}
+                                className="w-full p-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+                                required
+                            />
+                        </div>
 
-      <div className="bg-white p-6 rounded-xl shadow-lg border border-blue-200">
-        <h2 className="text-2xl font-bold text-blue-700 mb-4">สรุปรายเดือน</h2>
-        <p className="text-xl text-green-600 mb-2">รายรับ: {monthlySummary.income.toLocaleString('th-TH', { style: 'currency', currency: 'THB' })}</p>
-        <p className="text-xl text-red-600">รายจ่าย: {monthlySummary.expense.toLocaleString('th-TH', { style: 'currency', currency: 'THB' })}</p>
-      </div>
+                        <div>
+                            <label htmlFor="type" className="block text-sm font-medium text-gray-700 mb-1">ประเภท</label>
+                            <select
+                                id="type"
+                                value={type}
+                                onChange={(e) => setType(e.target.value)}
+                                className="w-full p-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+                            >
+                                <option value="expense">รายจ่าย</option>
+                                <option value="income">รายรับ</option>
+                            </select>
+                        </div>
 
-      <div className="lg:col-span-3 bg-white p-6 rounded-xl shadow-lg border border-blue-200">
-        <h2 className="text-2xl font-bold text-blue-700 mb-4">รายการล่าสุด</h2>
-        {transactions.length > 0 ? (
-          <ul className="space-y-3">
-            {transactions.slice(0, 5).map(txn => (
-              <li key={txn.id} className="flex justify-between items-center p-3 bg-blue-50 rounded-lg shadow-sm">
-                <div>
-                  <p className="font-semibold text-lg">{txn.description}</p>
-                  <p className="text-sm text-gray-600">{txn.date} | {txn.category}</p>
+                        <div>
+                            <label htmlFor="category" className="block text-sm font-medium text-gray-700 mb-1">หมวดหมู่</label>
+                            <select
+                                id="category"
+                                value={category}
+                                onChange={(e) => setCategory(e.target.value)}
+                                className="w-full p-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+                                required
+                            >
+                                {categories.length > 0 ? (
+                                    categories.map(cat => (
+                                        <option key={cat.id} value={cat.name}>{cat.name}</option>
+                                    ))
+                                ) : (
+                                    <option value="">ไม่มีหมวดหมู่ (กรุณาเพิ่มในหน้าหมวดหมู่)</option>
+                                )}
+                            </select>
+                        </div>
+
+                        <div>
+                            <label htmlFor="description" className="block text-sm font-medium text-gray-700 mb-1">รายละเอียดรายการ</label>
+                            <input
+                                type="text"
+                                id="description"
+                                value={description}
+                                onChange={(e) => setDescription(e.target.value)}
+                                className="w-full p-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+                                placeholder="เช่น ขายสินค้าชุด A, ค่าเดินทางไปประชุม"
+                                required
+                            />
+                        </div>
+
+                        <div>
+                            <label htmlFor="amount" className="block text-sm font-medium text-gray-700 mb-1">จำนวนเงิน</label>
+                            <input
+                                type="number"
+                                id="amount"
+                                value={amount}
+                                onChange={(e) => setAmount(e.target.value)}
+                                className="w-full p-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+                                step="0.01"
+                                min="0.01"
+                                required
+                            />
+                        </div>
+
+                        <div>
+                            <label htmlFor="paymentMethod" className="block text-sm font-medium text-gray-700 mb-1">วิธีการชำระเงิน</label>
+                            <input
+                                type="text"
+                                id="paymentMethod"
+                                value={paymentMethod}
+                                onChange={(e) => setPaymentMethod(e.target.value)}
+                                className="w-full p-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+                                placeholder="เช่น เงินสด, โอน, เช็ค, QR"
+                                required
+                            />
+                        </div>
+
+                        {/* New fields */}
+                        <div>
+                            <label htmlFor="referenceNo" className="block text-sm font-medium text-gray-700 mb-1">เลขที่อ้างอิง/ใบเสร็จ (ไม่บังคับ)</label>
+                            <input
+                                type="text"
+                                id="referenceNo"
+                                value={referenceNo}
+                                onChange={(e) => setReferenceNo(e.target.value)}
+                                className="w-full p-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+                                placeholder="เช่น INV-2023-001"
+                            />
+                        </div>
+
+                        <div>
+                            <label htmlFor="payeePayer" className="block text-sm font-medium text-gray-700 mb-1">ผู้รับ/ผู้จ่าย (ไม่บังคับ)</label>
+                            <input
+                                type="text"
+                                id="payeePayer"
+                                value={payeePayer}
+                                onChange={(e) => setPayeePayer(e.target.value)}
+                                className="w-full p-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+                                placeholder="เช่น บริษัท ABC, นายสมชาย"
+                            />
+                        </div>
+
+                        <div>
+                            <label htmlFor="notes" className="block text-sm font-medium text-gray-700 mb-1">หมายเหตุเพิ่มเติม (ไม่บังคับ)</label>
+                            <textarea
+                                id="notes"
+                                value={notes}
+                                onChange={(e) => setNotes(e.target.value)}
+                                rows="3"
+                                className="w-full p-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+                                placeholder="บันทึกรายละเอียดเพิ่มเติมเกี่ยวกับรายการนี้"
+                            ></textarea>
+                        </div>
+
+                        <div>
+                            <label htmlFor="attachment" className="block text-sm font-medium text-gray-700 mb-1">แนบไฟล์เอกสารประกอบ</label>
+                            <input
+                                type="file"
+                                id="attachment"
+                                onChange={handleFileChange}
+                                className="w-full p-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                            />
+                            {attachmentName && <p className="text-sm text-gray-500 mt-1">ไฟล์ที่เลือก: {attachmentName}</p>}
+                            {!attachmentName && initialData?.attachment && (
+                                <p className="text-sm text-gray-500 mt-1">ไฟล์เดิม: {initialData.attachment}</p>
+                            )}
+                        </div>
+
+                        {message.text && (
+                            <div className={`p-3 rounded-lg text-sm ${message.type === 'success' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                                {message.text}
+                            </div>
+                        )}
+
+                        <button
+                            type="submit"
+                            className="w-full bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700 transition-colors duration-300 shadow-md"
+                        >
+                            {initialData ? 'บันทึกการแก้ไข' : 'บันทึกรายการ'}
+                        </button>
+                        {initialData && (
+                            <button
+                                type="button"
+                                onClick={() => onSave(null)} // Signal to clear editing state in parent
+                                className="w-full bg-gray-300 text-gray-800 py-3 rounded-lg font-semibold hover:bg-gray-400 transition-colors duration-300 shadow-md mt-2"
+                            >
+                                ยกเลิกการแก้ไข
+                            </button>
+                        )}
+                    </form>
                 </div>
-                <p className={`font-bold text-xl ${txn.type === 'income' ? 'text-green-600' : 'text-red-600'}`}>
-                  {txn.type === 'expense' && '- '}
-                  {parseFloat(txn.amount).toLocaleString('th-TH', { style: 'currency', currency: 'THB' })}
-                </p>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="text-gray-500">ไม่มีรายการล่าสุด</p>
-        )}
-      </div>
-    </div>
-  );
-}
-
-// Transaction Form Component
-function TransactionForm({ categories, onSave, initialData }) {
-  const [date, setDate] = useState('');
-  const [type, setType] = useState('expense'); // 'income' or 'expense'
-  const [category, setCategory] = useState('');
-  const [description, setDescription] = useState('');
-  const [amount, setAmount] = useState('');
-  const [paymentMethod, setPaymentMethod] = useState('');
-  const [attachment, setAttachment] = useState(null); // File object
-  const [attachmentName, setAttachmentName] = useState(''); // Name for display
-  // New fields for more detailed transactions
-  const [referenceNo, setReferenceNo] = useState(''); // เลขที่อ้างอิง/ใบเสร็จ
-  const [payeePayer, setPayeePayer] = useState(''); // ผู้รับ/ผู้จ่าย
-  const [notes, setNotes] = useState(''); // หมายเหตุเพิ่มเติม
-
-  const [message, setMessage] = useState({ text: '', type: '' }); // 'success' or 'error'
-
-  useEffect(() => {
-    // Populate form if initialData is provided (for editing)
-    if (initialData) {
-      setDate(initialData.date);
-      setType(initialData.type);
-      setCategory(initialData.category);
-      setDescription(initialData.description);
-      setAmount(initialData.amount.toString());
-      setPaymentMethod(initialData.paymentMethod);
-      setAttachmentName(initialData.attachment || ''); // Display existing attachment name
-      setReferenceNo(initialData.referenceNo || '');
-      setPayeePayer(initialData.payeePayer || '');
-      setNotes(initialData.notes || '');
-    } else {
-      // Reset form for new entry
-      setDate('');
-      setType('expense');
-      setDescription('');
-      setAmount('');
-      setPaymentMethod('');
-      setAttachment(null);
-      setAttachmentName('');
-      setReferenceNo('');
-      setPayeePayer('');
-      setNotes('');
-    }
-    // Set default category if categories are loaded and no initialData or category is set
-    if (categories.length > 0 && !category && !initialData) {
-      setCategory(categories[0].name);
-    } else if (initialData && !categories.some(cat => cat.name === initialData.category)) {
-      // If editing and category no longer exists, reset to first available
-      setCategory(categories.length > 0 ? categories[0].name : '');
-    }
-  }, [initialData, categories]);
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setMessage({ text: '', type: '' });
-
-    if (!date || !category || !description || !amount || !paymentMethod) {
-      setMessage({ text: 'กรุณากรอกข้อมูลที่จำเป็นให้ครบถ้วน', type: 'error' });
-      return;
-    }
-    if (isNaN(parseFloat(amount)) || parseFloat(amount) <= 0) {
-      setMessage({ text: 'จำนวนเงินไม่ถูกต้อง', type: 'error' });
-      return;
-    }
-
-    const transactionData = {
-      date,
-      type,
-      category,
-      description,
-      amount: parseFloat(amount),
-      paymentMethod,
-      attachment: attachmentName, // Store the name, actual file upload is separate
-      referenceNo, // New field
-      payeePayer,  // New field
-      notes,       // New field
-      createdAt: initialData ? initialData.createdAt : new Date().toISOString(), // Preserve original creation date if editing
-    };
-
-    try {
-      await onSave(transactionData);
-      setMessage({ text: 'บันทึกรายการสำเร็จ!', type: 'success' });
-      // Clear form only if adding new transaction
-      if (!initialData) {
-        setDate('');
-        setType('expense');
-        setCategory(categories.length > 0 ? categories[0].name : '');
-        setDescription('');
-        setAmount('');
-        setPaymentMethod('');
-        setAttachment(null);
-        setAttachmentName('');
-        setReferenceNo('');
-        setPayeePayer('');
-        setNotes('');
-      }
-    } catch (error) {
-      console.error("Error saving transaction:", error);
-      setMessage({ text: 'เกิดข้อผิดพลาดในการบันทึกรายการ', type: 'error' });
-    }
-  };
-
-  const handleFileChange = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      setAttachment(file);
-      setAttachmentName(file.name);
-      // In a real application, you would upload this file to Firebase Storage
-      // and store the download URL in Firestore.
-      console.log("File selected:", file.name);
-    } else {
-      setAttachment(null);
-      setAttachmentName('');
-    }
-  };
-
-  return (
-    <div className="bg-white p-6 rounded-xl shadow-lg border border-blue-200 mb-6">
-      <h2 className="text-2xl font-bold text-blue-700 mb-4">{initialData ? 'แก้ไขรายการบัญชี' : 'เพิ่มรายการบัญชีใหม่'}</h2>
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <div>
-          <label htmlFor="date" className="block text-sm font-medium text-gray-700 mb-1">วันที่ทำรายการ</label>
-          <input
-            type="date"
-            id="date"
-            value={date}
-            onChange={(e) => setDate(e.target.value)}
-            className="w-full p-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
-            required
-          />
-        </div>
-
-        <div>
-          <label htmlFor="type" className="block text-sm font-medium text-gray-700 mb-1">ประเภท</label>
-          <select
-            id="type"
-            value={type}
-            onChange={(e) => setType(e.target.value)}
-            className="w-full p-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
-          >
-            <option value="expense">รายจ่าย</option>
-            <option value="income">รายรับ</option>
-          </select>
-        </div>
-
-        <div>
-          <label htmlFor="category" className="block text-sm font-medium text-gray-700 mb-1">หมวดหมู่</label>
-          <select
-            id="category"
-            value={category}
-            onChange={(e) => setCategory(e.target.value)}
-            className="w-full p-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
-            required
-          >
-            {categories.length > 0 ? (
-              categories.map(cat => (
-                <option key={cat.id} value={cat.name}>{cat.name}</option>
-              ))
-            ) : (
-              <option value="">ไม่มีหมวดหมู่ (กรุณาเพิ่มในหน้าหมวดหมู่)</option>
-            )}
-          </select>
-        </div>
-
-        <div>
-          <label htmlFor="description" className="block text-sm font-medium text-gray-700 mb-1">รายละเอียดรายการ</label>
-          <input
-            type="text"
-            id="description"
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            className="w-full p-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
-            placeholder="เช่น ขายสินค้าชุด A, ค่าเดินทางไปประชุม"
-            required
-          />
-        </div>
-
-        <div>
-          <label htmlFor="amount" className="block text-sm font-medium text-gray-700 mb-1">จำนวนเงิน</label>
-          <input
-            type="number"
-            id="amount"
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
-            className="w-full p-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
-            step="0.01"
-            min="0.01"
-            required
-          />
-        </div>
-
-        <div>
-          <label htmlFor="paymentMethod" className="block text-sm font-medium text-gray-700 mb-1">วิธีการชำระเงิน</label>
-          <input
-            type="text"
-            id="paymentMethod"
-            value={paymentMethod}
-            onChange={(e) => setPaymentMethod(e.target.value)}
-            className="w-full p-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
-            placeholder="เช่น เงินสด, โอน, เช็ค, QR"
-            required
-          />
-        </div>
-
-        {/* New fields */}
-        <div>
-          <label htmlFor="referenceNo" className="block text-sm font-medium text-gray-700 mb-1">เลขที่อ้างอิง/ใบเสร็จ (ไม่บังคับ)</label>
-          <input
-            type="text"
-            id="referenceNo"
-            value={referenceNo}
-            onChange={(e) => setReferenceNo(e.target.value)}
-            className="w-full p-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
-            placeholder="เช่น INV-2023-001"
-          />
-        </div>
-
-        <div>
-          <label htmlFor="payeePayer" className="block text-sm font-medium text-gray-700 mb-1">ผู้รับ/ผู้จ่าย (ไม่บังคับ)</label>
-          <input
-            type="text"
-            id="payeePayer"
-            value={payeePayer}
-            onChange={(e) => setPayeePayer(e.target.value)}
-            className="w-full p-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
-            placeholder="เช่น บริษัท ABC, นายสมชาย"
-          />
-        </div>
-
-        <div>
-          <label htmlFor="notes" className="block text-sm font-medium text-gray-700 mb-1">หมายเหตุเพิ่มเติม (ไม่บังคับ)</label>
-          <textarea
-            id="notes"
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            rows="3"
-            className="w-full p-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
-            placeholder="บันทึกรายละเอียดเพิ่มเติมเกี่ยวกับรายการนี้"
-          ></textarea>
-        </div>
-
-        <div>
-          <label htmlFor="attachment" className="block text-sm font-medium text-gray-700 mb-1">แนบไฟล์เอกสารประกอบ</label>
-          <input
-            type="file"
-            id="attachment"
-            onChange={handleFileChange}
-            className="w-full p-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
-          />
-          {attachmentName && <p className="text-sm text-gray-500 mt-1">ไฟล์ที่เลือก: {attachmentName}</p>}
-          {!attachmentName && initialData?.attachment && (
-            <p className="text-sm text-gray-500 mt-1">ไฟล์เดิม: {initialData.attachment}</p>
-          )}
-        </div>
-
-        {message.text && (
-          <div className={`p-3 rounded-lg text-sm ${message.type === 'success' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-            {message.text}
-          </div>
-        )}
-
-        <button
-          type="submit"
-          className="w-full bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700 transition-colors duration-300 shadow-md"
-        >
-          {initialData ? 'บันทึกการแก้ไข' : 'บันทึกรายการ'}
-        </button>
-        {initialData && (
-          <button
-            type="button"
-            onClick={() => onSave(null)} // Signal to clear editing state in parent
-            className="w-full bg-gray-300 text-gray-800 py-3 rounded-lg font-semibold hover:bg-gray-400 transition-colors duration-300 shadow-md mt-2"
-          >
-            ยกเลิกการแก้ไข
-          </button>
-        )}
-      </form>
-    </div>
-  );
-}
-
-// Transaction List Component
-function TransactionList({ transactions, categories, onEdit, onDelete }) {
-  const [searchTerm, setSearchTerm] = useState('');
-  const [filterType, setFilterType] = useState('all'); // 'all', 'income', 'expense'
-  const [filterCategory, setFilterCategory] = useState('all'); // 'all' or category name
-  const [startDate, setStartDate] = useState('');
-  const [endDate, setEndDate] = useState('');
-  const [sortBy, setSortBy] = useState('date');
-  const [sortOrder, setSortOrder] = useState('desc'); // 'asc' or 'desc'
-
-  const filteredTransactions = transactions.filter(txn => {
-    const matchesSearch = (txn.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                          txn.category?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                          txn.paymentMethod?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                          txn.referenceNo?.toLowerCase().includes(searchTerm.toLowerCase()) || // New field
-                          txn.payeePayer?.toLowerCase().includes(searchTerm.toLowerCase()) ||  // New field
-                          txn.notes?.toLowerCase().includes(searchTerm.toLowerCase()));       // New field
-    const matchesType = filterType === 'all' || txn.type === filterType;
-    const matchesCategory = filterCategory === 'all' || txn.category === filterCategory;
-    const matchesDate = (!startDate || txn.date >= startDate) && (!endDate || txn.date <= endDate);
-
-    return matchesSearch && matchesType && matchesCategory && matchesDate;
-  }).sort((a, b) => {
-    let compareA, compareB;
-    if (sortBy === 'date') {
-      compareA = new Date(a.date);
-      compareB = new Date(b.date);
-    } else if (sortBy === 'amount') {
-      compareA = parseFloat(a.amount);
-      compareB = parseFloat(b.amount);
-    } else { // description, category, referenceNo, payeePayer, notes
-      compareA = a[sortBy] ? a[sortBy].toLowerCase() : ''; // Handle potential undefined/null
-      compareB = b[sortBy] ? b[sortBy].toLowerCase() : ''; // Handle potential undefined/null
-    }
-
-    if (compareA < compareB) return sortOrder === 'asc' ? -1 : 1;
-    if (compareA > compareB) return sortOrder === 'asc' ? 1 : -1;
-    return 0;
-  });
-
-  return (
-    <div className="bg-white p-6 rounded-xl shadow-lg border border-blue-200">
-      <h2 className="text-2xl font-bold text-blue-700 mb-4">รายการบัญชีทั้งหมด</h2>
-
-      {/* Filter and Search */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6 p-4 bg-blue-50 rounded-lg shadow-inner">
-        <div>
-          <label htmlFor="searchTerm" className="block text-sm font-medium text-gray-700 mb-1">ค้นหา</label>
-          <input
-            type="text"
-            id="searchTerm"
-            placeholder="ค้นหารายการ..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full p-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
-          />
-        </div>
-        <div>
-          <label htmlFor="filterType" className="block text-sm font-medium text-gray-700 mb-1">ประเภท</label>
-          <select
-            id="filterType"
-            value={filterType}
-            onChange={(e) => setFilterType(e.target.value)}
-            className="w-full p-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
-          >
-            <option value="all">ทั้งหมด</option>
-            <option value="income">รายรับ</option>
-            <option value="expense">รายจ่าย</option>
-          </select>
-        </div>
-        <div>
-          <label htmlFor="filterCategory" className="block text-sm font-medium text-gray-700 mb-1">หมวดหมู่</label>
-          <select
-            id="filterCategory"
-            value={filterCategory}
-            onChange={(e) => setFilterCategory(e.target.value)}
-            className="w-full p-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
-          >
-            <option value="all">ทั้งหมด</option>
-            {categories.map(cat => (
-              <option key={cat.id} value={cat.name}>{cat.name}</option>
-            ))}
-          </select>
-        </div>
-        <div className="flex space-x-2">
-          <div className="flex-1">
-            <label htmlFor="startDate" className="block text-sm font-medium text-gray-700 mb-1">จากวันที่</label>
-            <input
-              type="date"
-              id="startDate"
-              value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
-              className="w-full p-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
-            />
-          </div>
-          <div className="flex-1">
-            <label htmlFor="endDate" className="block text-sm font-medium text-gray-700 mb-1">ถึงวันที่</label>
-            <input
-              type="date"
-              id="endDate"
-              value={endDate}
-              onChange={(e) => setEndDate(e.target.value)}
-              className="w-full p-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
-            />
-          </div>
-        </div>
-      </div>
-
-      {/* Sort Options */}
-      <div className="flex items-center space-x-4 mb-4">
-        <span className="text-sm font-medium text-gray-700">เรียงตาม:</span>
-        <select
-          value={sortBy}
-          onChange={(e) => setSortBy(e.target.value)}
-          className="p-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
-        >
-          <option value="date">วันที่</option>
-          <option value="amount">จำนวนเงิน</option>
-          <option value="description">รายละเอียด</option>
-          <option value="category">หมวดหมู่</option>
-          <option value="referenceNo">เลขที่อ้างอิง</option> {/* New sort option */}
-          <option value="payeePayer">ผู้รับ/ผู้จ่าย</option>  {/* New sort option */}
-        </select>
-        <button
-          onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
-          className="p-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors duration-200"
-        >
-          {sortOrder === 'asc' ? 'น้อยไปมาก (▲)' : 'มากไปน้อย (▼)'}
-        </button>
-      </div>
-
-      {/* Transaction Table */}
-      {filteredTransactions.length > 0 ? (
-        <div className="overflow-x-auto">
-          <table className="min-w-full bg-white border border-gray-200 rounded-lg">
-            <thead className="bg-blue-100">
-              <tr>
-                <th className="py-3 px-4 text-left text-sm font-semibold text-blue-700 rounded-tl-lg">วันที่</th>
-                <th className="py-3 px-4 text-left text-sm font-semibold text-blue-700">ประเภท</th>
-                <th className="py-3 px-4 text-left text-sm font-semibold text-blue-700">หมวดหมู่</th>
-                <th className="py-3 px-4 text-left text-sm font-semibold text-blue-700">รายละเอียด</th>
-                <th className="py-3 px-4 text-left text-sm font-semibold text-blue-700">ผู้รับ/ผู้จ่าย</th> {/* New column */}
-                <th className="py-3 px-4 text-right text-sm font-semibold text-blue-700">จำนวนเงิน</th>
-                <th className="py-3 px-4 text-left text-sm font-semibold text-blue-700">วิธีการชำระ</th>
-                <th className="py-3 px-4 text-left text-sm font-semibold text-blue-700">เลขที่อ้างอิง</th> {/* New column */}
-                <th className="py-3 px-4 text-left text-sm font-semibold text-blue-700">หมายเหตุ</th> {/* New column */}
-                <th className="py-3 px-4 text-left text-sm font-semibold text-blue-700 rounded-tr-lg">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredTransactions.map(txn => (
-                <tr key={txn.id} className="border-b border-gray-200 hover:bg-blue-50">
-                  <td className="py-3 px-4 text-sm">{txn.date}</td>
-                  <td className="py-3 px-4 text-sm">
-                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                      txn.type === 'income' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
-                    }`}>
-                      {txn.type === 'income' ? 'รายรับ' : 'รายจ่าย'}
-                    </span>
-                  </td>
-                  <td className="py-3 px-4 text-sm">{txn.category}</td>
-                  <td className="py-3 px-4 text-sm">{txn.description}</td>
-                  <td className="py-3 px-4 text-sm">{txn.payeePayer}</td> {/* New cell */}
-                  <td className={`py-3 px-4 text-right text-sm font-semibold ${txn.type === 'income' ? 'text-green-600' : 'text-red-600'}`}>
-                    {parseFloat(txn.amount).toLocaleString('th-TH', { style: 'currency', currency: 'THB' })}
-                  </td>
-                  <td className="py-3 px-4 text-sm">{txn.paymentMethod}</td>
-                  <td className="py-3 px-4 text-sm">{txn.referenceNo}</td> {/* New cell */}
-                  <td className="py-3 px-4 text-sm max-w-xs overflow-hidden text-ellipsis whitespace-nowrap" title={txn.notes}>{txn.notes}</td> {/* New cell */}
-                  <td className="py-3 px-4 text-sm flex space-x-2">
-                    <button
-                      onClick={() => onEdit(txn)}
-                      className="text-blue-600 hover:text-blue-800 transition-colors duration-200"
-                      title="แก้ไข"
-                    >
-                      {/* Edit icon from Lucide React */}
-                      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-edit"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4Z"></path></svg>
-                    </button>
-                    <button
-                      onClick={() => onDelete(txn.id)}
-                      className="text-red-600 hover:text-red-800 transition-colors duration-200"
-                      title="ลบ"
-                    >
-                      {/* Trash icon from Lucide React */}
-                      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-trash-2"><path d="M3 6h18"></path><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path><line x1="10" x2="10" y1="11" y2="17"></line><line x1="14" x2="14" y1="11" y2="17"></line></svg>
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      ) : (
-        <p className="text-gray-500 mt-4">ไม่มีรายการที่ตรงกับเงื่อนไข</p>
-      )}
-    </div>
-  );
-}
-
-// Transactions View Component (Combines Form and List)
-function Transactions() {
-  const { db, userId, isAuthReady } = useAppContext();
-  const [transactions, setTransactions] = useState([]);
-  const [categories, setCategories] = useState([]);
-  const [editingTransaction, setEditingTransaction] = useState(null);
-  const [showModal, setShowModal] = useState(false);
-  const [modalMessage, setModalMessage] = useState('');
-  const [modalAction, setModalAction] = useState(null); // Function to execute on confirm
-
-  useEffect(() => {
-    if (db && userId && isAuthReady) {
-      // Fetch transactions
-      const transactionsRef = collection(db, `artifacts/${__app_id}/users/${userId}/transactions`);
-      const qTransactions = query(transactionsRef, orderBy('date', 'desc'));
-      const unsubscribeTransactions = onSnapshot(qTransactions, (snapshot) => {
-        const fetchedTransactions = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        setTransactions(fetchedTransactions);
-      }, (error) => {
-        console.error("Error fetching transactions:", error);
-      });
-
-      // Fetch categories
-      const categoriesRef = collection(db, `artifacts/${__app_id}/users/${userId}/categories`);
-      const qCategories = query(categoriesRef, orderBy('name'));
-      const unsubscribeCategories = onSnapshot(qCategories, (snapshot) => {
-        const fetchedCategories = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        setCategories(fetchedCategories);
-      }, (error) => {
-        console.error("Error fetching categories:", error);
-      });
-
-      return () => {
-        unsubscribeTransactions();
-        unsubscribeCategories();
-      };
-    }
-  }, [db, userId, isAuthReady]);
-
-  const handleSaveTransaction = async (transactionData) => {
-    if (!db || !userId) {
-      console.error("Firestore DB or User ID not available.");
-      return;
-    }
-    try {
-      if (editingTransaction) {
-        // Update existing transaction
-        const transactionRef = doc(db, `artifacts/${__app_id}/users/${userId}/transactions`, editingTransaction.id);
-        await updateDoc(transactionRef, transactionData);
-        setEditingTransaction(null); // Clear editing state
-      } else {
-        // Add new transaction
-        await addDoc(collection(db, `artifacts/${__app_id}/users/${userId}/transactions`), transactionData);
-      }
-    } catch (error) {
-      console.error("Error saving transaction:", error);
-      throw error; // Re-throw to be caught by the form's error handling
-    }
-  };
-
-  const handleEditTransaction = (txn) => {
-    setEditingTransaction(txn);
-  };
-
-  const handleDeleteTransaction = (id) => {
-    setModalMessage('คุณแน่ใจหรือไม่ว่าต้องการลบรายการนี้?');
-    setModalAction(() => async () => {
-      if (!db || !userId) {
-        console.error("Firestore DB or User ID not available.");
-        return;
-      }
-      try {
-        await deleteDoc(doc(db, `artifacts/${__app_id}/users/${userId}/transactions`, id));
-        setModalMessage('รายการถูกลบสำเร็จ!');
-        setTimeout(() => setShowModal(false), 1500); // Close after a short delay
-      } catch (error) {
-        console.error("Error deleting transaction:", error);
-        setModalMessage('เกิดข้อผิดพลาดในการลบรายการ');
-      }
-    });
-    setShowModal(true);
-  };
-
-  return (
-    <div className="space-y-6">
-      {/* Pass initialData to TransactionForm for editing */}
-      <TransactionForm categories={categories} onSave={handleSaveTransaction} initialData={editingTransaction} />
-      <TransactionList transactions={transactions} categories={categories} onEdit={handleEditTransaction} onDelete={handleDeleteTransaction} />
-
-      {showModal && (
-        <Modal
-          message={modalMessage}
-          onConfirm={modalAction}
-          onCancel={() => setShowModal(false)}
-          showConfirmButton={typeof modalAction === 'function'} // Only show confirm if an action is pending
-        />
-      )}
-    </div>
-  );
-}
-
-// Category Management Component
-function CategoryManagement() {
-  const { db, userId, isAuthReady } = useAppContext();
-  const [categories, setCategories] = useState([]);
-  const [newCategoryName, setNewCategoryName] = useState('');
-  const [newBudget, setNewBudget] = useState('');
-  const [message, setMessage] = useState({ text: '', type: '' });
-  const [editingCategory, setEditingCategory] = useState(null);
-  const [showModal, setShowModal] = useState(false);
-  const [modalMessage, setModalMessage] = useState('');
-  const [modalAction, setModalAction] = useState(null);
-
-  useEffect(() => {
-    if (db && userId && isAuthReady) {
-      const q = query(collection(db, `artifacts/${__app_id}/users/${userId}/categories`), orderBy('name'));
-      const unsubscribe = onSnapshot(q, (snapshot) => {
-        const fetchedCategories = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        setCategories(fetchedCategories);
-      }, (error) => {
-        console.error("Error fetching categories:", error);
-      });
-      return () => unsubscribe();
-    }
-  }, [db, userId, isAuthReady]);
-
-  const handleAddOrUpdateCategory = async (e) => {
-    e.preventDefault();
-    setMessage({ text: '', type: '' });
-
-    if (!newCategoryName.trim()) {
-      setMessage({ text: 'กรุณากรอกชื่อหมวดหมู่', type: 'error' });
-      return;
-    }
-    const budgetAmount = parseFloat(newBudget);
-    if (newBudget !== '' && (isNaN(budgetAmount) || budgetAmount < 0)) {
-      setMessage({ text: 'งบประมาณไม่ถูกต้อง', type: 'error' });
-      return;
-    }
-
-    const categoryData = {
-      name: newCategoryName.trim(),
-      budget: newBudget === '' ? 0 : budgetAmount,
-      createdAt: new Date().toISOString(),
-    };
-
-    try {
-      if (editingCategory) {
-        // Update existing category
-        const categoryRef = doc(db, `artifacts/${__app_id}/users/${userId}/categories`, editingCategory.id);
-        await updateDoc(categoryRef, categoryData);
-        setMessage({ text: 'อัปเดตหมวดหมู่สำเร็จ!', type: 'success' });
-        setEditingCategory(null);
-      } else {
-        // Add new category
-        await addDoc(collection(db, `artifacts/${__app_id}/users/${userId}/categories`), categoryData);
-        setMessage({ text: 'เพิ่มหมวดหมู่สำเร็จ!', type: 'success' });
-      }
-      setNewCategoryName('');
-      setNewBudget('');
-    } catch (error) {
-      console.error("Error saving category:", error);
-      setMessage({ text: 'เกิดข้อผิดพลาดในการบันทึกหมวดหมู่', type: 'error' });
-    }
-  };
-
-  const handleEditCategory = (category) => {
-    setEditingCategory(category);
-    setNewCategoryName(category.name);
-    setNewBudget(category.budget.toString());
-  };
-
-  const handleDeleteCategory = (id) => {
-    setModalMessage('คุณแน่ใจหรือไม่ว่าต้องการลบหมวดหมู่นี้? รายการที่เกี่ยวข้องจะไม่ถูกลบอัตโนมัติ.');
-    setModalAction(() => async () => {
-      if (!db || !userId) {
-        console.error("Firestore DB or User ID not available.");
-        return;
-      }
-      try {
-        await deleteDoc(doc(db, `artifacts/${__app_id}/users/${userId}/categories`, id));
-        setModalMessage('หมวดหมู่ถูกลบสำเร็จ!');
-        setTimeout(() => setShowModal(false), 1500);
-      } catch (error) {
-        console.error("Error deleting category:", error);
-        setModalMessage('เกิดข้อผิดพลาดในการลบหมวดหมู่');
-      }
-    });
-    setShowModal(true);
-  };
-
-  return (
-    <div className="space-y-6">
-      <div className="bg-white p-6 rounded-xl shadow-lg border border-blue-200">
-        <h2 className="text-2xl font-bold text-blue-700 mb-4">{editingCategory ? 'แก้ไขหมวดหมู่' : 'เพิ่มหมวดหมู่ใหม่'}</h2>
-        <form onSubmit={handleAddOrUpdateCategory} className="space-y-4">
-          <div>
-            <label htmlFor="categoryName" className="block text-sm font-medium text-gray-700 mb-1">ชื่อหมวดหมู่</label>
-            <input
-              type="text"
-              id="categoryName"
-              value={newCategoryName}
-              onChange={(e) => setNewCategoryName(e.target.value)}
-              className="w-full p-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
-              placeholder="เช่น ค่าเช่า, รายได้จากการขาย"
-              required
-            />
-          </div>
-          <div>
-            <label htmlFor="budget" className="block text-sm font-medium text-gray-700 mb-1">วงเงินงบประมาณ (ไม่บังคับ)</label>
-            <input
-              type="number"
-              id="budget"
-              value={newBudget}
-              onChange={(e) => setNewBudget(e.target.value)}
-              className="w-full p-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
-              step="0.01"
-              min="0"
-              placeholder="เช่น 10000 (0 ถ้าไม่มีงบประมาณ)"
-            />
-          </div>
-
-          {message.text && (
-            <div className={`p-3 rounded-lg text-sm ${message.type === 'success' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-              {message.text}
-            </div>
-          )}
-
-          <button
-            type="submit"
-            className="w-full bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700 transition-colors duration-300 shadow-md"
-          >
-            {editingCategory ? 'บันทึกการแก้ไข' : 'เพิ่มหมวดหมู่'}
-          </button>
-          {editingCategory && (
-            <button
-              type="button"
-              onClick={() => { setEditingCategory(null); setNewCategoryName(''); setNewBudget(''); setMessage({ text: '', type: '' }); }}
-              className="w-full bg-gray-300 text-gray-800 py-3 rounded-lg font-semibold hover:bg-gray-400 transition-colors duration-300 shadow-md mt-2"
-            >
-              ยกเลิกการแก้ไข
-            </button>
-          )}
-        </form>
-      </div>
-
-      <div className="bg-white p-6 rounded-xl shadow-lg border border-blue-200">
-        <h2 className="text-2xl font-bold text-blue-700 mb-4">หมวดหมู่ทั้งหมด</h2>
-        {categories.length > 0 ? (
-          <div className="overflow-x-auto">
-            <table className="min-w-full bg-white border border-gray-200 rounded-lg">
-              <thead className="bg-blue-100">
-                <tr>
-                  <th className="py-3 px-4 text-left text-sm font-semibold text-blue-700 rounded-tl-lg">ชื่อหมวดหมู่</th>
-                  <th className="py-3 px-4 text-right text-sm font-semibold text-blue-700">วงเงินงบประมาณ</th>
-                  <th className="py-3 px-4 text-left text-sm font-semibold text-blue-700 rounded-tr-lg">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {categories.map(cat => (
-                  <tr key={cat.id} className="border-b border-gray-200 hover:bg-blue-50">
-                    <td className="py-3 px-4 text-sm">{cat.name}</td>
-                    <td className="py-3 px-4 text-right text-sm">
-                      {parseFloat(cat.budget).toLocaleString('th-TH', { style: 'currency', currency: 'THB' })}
-                    </td>
-                    <td className="py-3 px-4 text-sm flex space-x-2">
-                      <button
-                        onClick={() => handleEditCategory(cat)}
-                        className="text-blue-600 hover:text-blue-800 transition-colors duration-200"
-                        title="แก้ไข"
-                      >
-                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-edit"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4Z"></path></svg>
-                      </button>
-                      <button
-                        onClick={() => handleDeleteCategory(cat.id)}
-                        className="text-red-600 hover:text-red-800 transition-colors duration-200"
-                        title="ลบ"
-                      >
-                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-trash-2"><path d="M3 6h18"></path><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path><line x1="10" x2="10" y1="11" y2="17"></line><line x1="14" x2="14" y1="11" y2="17"></line></svg>
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ) : (
-          <p className="text-gray-500">ยังไม่มีหมวดหมู่</p>
-        )}
-      </div>
-
-      {showModal && (
-        <Modal
-          message={modalMessage}
-          onConfirm={modalAction}
-          onCancel={() => setShowModal(false)}
-          showConfirmButton={typeof modalAction === 'function'}
-        />
-      )}
-    </div>
-  );
-}
-
-// Accounts Payable/Receivable Component
-function AccountsPayableReceivable() {
-  const { db, userId, isAuthReady } = useAppContext();
-  const [accounts, setAccounts] = useState([]);
-  const [type, setType] = useState('payable'); // 'payable' or 'receivable'
-  const [description, setDescription] = useState('');
-  const [amount, setAmount] = useState('');
-  const [dueDate, setDueDate] = useState('');
-  const [message, setMessage] = useState({ text: '', type: '' });
-  const [editingAccount, setEditingAccount] = useState(null);
-  const [showModal, setShowModal] = useState(false);
-  const [modalMessage, setModalMessage] = useState('');
-  const [modalAction, setModalAction] = useState(null);
-
-  useEffect(() => {
-    if (db && userId && isAuthReady) {
-      const q = query(collection(db, `artifacts/${__app_id}/users/${userId}/accounts`), orderBy('dueDate'));
-      const unsubscribe = onSnapshot(q, (snapshot) => {
-        const fetchedAccounts = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        setAccounts(fetchedAccounts);
-      }, (error) => {
-        console.error("Error fetching accounts:", error);
-      });
-      return () => unsubscribe();
-    }
-  }, [db, userId, isAuthReady]);
-
-  const handleAddOrUpdateAccount = async (e) => {
-    e.preventDefault();
-    setMessage({ text: '', type: '' });
-
-    if (!description.trim() || !amount || !dueDate) {
-      setMessage({ text: 'กรุณากรอกข้อมูลให้ครบถ้วน', type: 'error' });
-      return;
-    }
-    const accAmount = parseFloat(amount);
-    if (isNaN(accAmount) || accAmount <= 0) {
-      setMessage({ text: 'จำนวนเงินไม่ถูกต้อง', type: 'error' });
-      return;
-    }
-
-    const accountData = {
-      type,
-      description: description.trim(),
-      amount: accAmount,
-      dueDate,
-      status: 'pending', // 'pending' or 'paid'
-      createdAt: new Date().toISOString(),
-    };
-
-    try {
-      if (editingAccount) {
-        const accountRef = doc(db, `artifacts/${__app_id}/users/${userId}/accounts`, editingAccount.id);
-        await updateDoc(accountRef, accountData);
-        setMessage({ text: 'อัปเดตรายการสำเร็จ!', type: 'success' });
-        setEditingAccount(null);
-      } else {
-        await addDoc(collection(db, `artifacts/${__app_id}/users/${userId}/accounts`), accountData);
-        setMessage({ text: 'เพิ่มรายการสำเร็จ!', type: 'success' });
-      }
-      setType('payable');
-      setDescription('');
-      setAmount('');
-      setDueDate('');
-    } catch (error) {
-      console.error("Error saving account:", error);
-      setMessage({ text: 'เกิดข้อผิดพลาดในการบันทึกรายการ', type: 'error' });
-    }
-  };
-
-  const handleEditAccount = (account) => {
-    setEditingAccount(account);
-    setType(account.type);
-    setDescription(account.description);
-    setAmount(account.amount.toString());
-    setDueDate(account.dueDate);
-  };
-
-  const handleDeleteAccount = (id) => {
-    setModalMessage('คุณแน่ใจหรือไม่ว่าต้องการลบรายการนี้?');
-    setModalAction(() => async () => {
-      if (!db || !userId) {
-        console.error("Firestore DB or User ID not available.");
-        return;
-      }
-      try {
-        await deleteDoc(doc(db, `artifacts/${__app_id}/users/${userId}/accounts`, id));
-        setModalMessage('รายการถูกลบสำเร็จ!');
-        setTimeout(() => setShowModal(false), 1500);
-      } catch (error) {
-        console.error("Error deleting account:", error);
-        setModalMessage('เกิดข้อผิดพลาดในการลบรายการ');
-      }
-    });
-    setShowModal(true);
-  };
-
-  const handleToggleStatus = async (account) => {
-    if (!db || !userId) {
-      console.error("Firestore DB or User ID not available.");
-      return;
-    }
-    const newStatus = account.status === 'pending' ? 'paid' : 'pending';
-    try {
-      const accountRef = doc(db, `artifacts/${__app_id}/users/${userId}/accounts`, account.id);
-      await updateDoc(accountRef, { status: newStatus });
-      setMessage({ text: `สถานะเปลี่ยนเป็น ${newStatus === 'paid' ? 'ชำระแล้ว' : 'ค้างอยู่'}`, type: 'success' });
-    } catch (error) {
-      console.error("Error updating account status:", error);
-      setMessage({ text: 'เกิดข้อผิดพลาดในการอัปเดตสถานะ', type: 'error' });
-    }
-  };
-
-  return (
-    <div className="space-y-6">
-      <div className="bg-white p-6 rounded-xl shadow-lg border border-blue-200">
-        <h2 className="text-2xl font-bold text-blue-700 mb-4">{editingAccount ? 'แก้ไขรายการเจ้าหนี้-ลูกหนี้' : 'เพิ่มรายการเจ้าหนี้-ลูกหนี้ใหม่'}</h2>
-        <form onSubmit={handleAddOrUpdateAccount} className="space-y-4">
-          <div>
-            <label htmlFor="accountType" className="block text-sm font-medium text-gray-700 mb-1">ประเภท</label>
-            <select
-              id="accountType"
-              value={type}
-              onChange={(e) => setType(e.target.value)}
-              className="w-full p-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
-            >
-              <option value="payable">ค้างจ่าย (เจ้าหนี้)</option>
-              <option value="receivable">ค้างรับ (ลูกหนี้)</option>
-            </select>
-          </div>
-          <div>
-            <label htmlFor="accountDescription" className="block text-sm font-medium text-gray-700 mb-1">รายละเอียดรายการ</label>
-            <input
-              type="text"
-              id="accountDescription"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              className="w-full p-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
-              placeholder="เช่น ค่าสินค้าจาก Supplier A, ลูกค้า B ค้างชำระ"
-              required
-            />
-          </div>
-          <div>
-            <label htmlFor="accountAmount" className="block text-sm font-medium text-gray-700 mb-1">จำนวนเงิน</label>
-            <input
-              type="number"
-              id="accountAmount"
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-              className="w-full p-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
-              step="0.01"
-              min="0.01"
-              required
-            />
-          </div>
-          <div>
-            <label htmlFor="dueDate" className="block text-sm font-medium text-gray-700 mb-1">วันครบกำหนดชำระ</label>
-            <input
-              type="date"
-              id="dueDate"
-              value={dueDate}
-              onChange={(e) => setDueDate(e.target.value)}
-              className="w-full p-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
-              required
-            />
-          </div>
-
-          {message.text && (
-            <div className={`p-3 rounded-lg text-sm ${message.type === 'success' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-              {message.text}
-            </div>
-          )}
-
-          <button
-            type="submit"
-            className="w-full bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700 transition-colors duration-300 shadow-md"
-          >
-            {editingAccount ? 'บันทึกการแก้ไข' : 'เพิ่มรายการ'}
-          </button>
-          {editingAccount && (
-            <button
-              type="button"
-              onClick={() => { setEditingAccount(null); setType('payable'); setDescription(''); setAmount(''); setDueDate(''); setMessage({ text: '', type: '' }); }}
-              className="w-full bg-gray-300 text-gray-800 py-3 rounded-lg font-semibold hover:bg-gray-400 transition-colors duration-300 shadow-md mt-2"
-            >
-              ยกเลิกการแก้ไข
-            </button>
-          )}
-        </form>
-      </div>
-
-      <div className="bg-white p-6 rounded-xl shadow-lg border border-blue-200">
-        <h2 className="text-2xl font-bold text-blue-700 mb-4">รายการเจ้าหนี้-ลูกหนี้</h2>
-        {accounts.length > 0 ? (
-          <div className="overflow-x-auto">
-            <table className="min-w-full bg-white border border-gray-200 rounded-lg">
-              <thead className="bg-blue-100">
-                <tr>
-                  <th className="py-3 px-4 text-left text-sm font-semibold text-blue-700 rounded-tl-lg">ประเภท</th>
-                  <th className="py-3 px-4 text-left text-sm font-semibold text-blue-700">รายละเอียด</th>
-                  <th className="py-3 px-4 text-right text-sm font-semibold text-blue-700">จำนวนเงิน</th>
-                  <th className="py-3 px-4 text-left text-sm font-semibold text-blue-700">วันครบกำหนด</th>
-                  <th className="py-3 px-4 text-left text-sm font-semibold text-blue-700">สถานะ</th>
-                  <th className="py-3 px-4 text-left text-sm font-semibold text-blue-700 rounded-tr-lg">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {accounts.map(acc => (
-                  <tr key={acc.id} className="border-b border-gray-200 hover:bg-blue-50">
-                    <td className="py-3 px-4 text-sm">
-                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                        acc.type === 'payable' ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'
-                      }`}>
-                        {acc.type === 'payable' ? 'ค้างจ่าย' : 'ค้างรับ'}
-                      </span>
-                    </td>
-                    <td className="py-3 px-4 text-sm">{acc.description}</td>
-                    <td className="py-3 px-4 text-right text-sm font-semibold">
-                      {parseFloat(acc.amount).toLocaleString('th-TH', { style: 'currency', currency: 'THB' })}
-                    </td>
-                    <td className="py-3 px-4 text-sm">{acc.dueDate}</td>
-                    <td className="py-3 px-4 text-sm">
-                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                        acc.status === 'pending' ? 'bg-yellow-100 text-yellow-700' : 'bg-blue-100 text-blue-700'
-                      }`}>
-                        {acc.status === 'pending' ? 'ค้างอยู่' : 'ชำระแล้ว'}
-                      </span>
-                    </td>
-                    <td className="py-3 px-4 text-sm flex space-x-2">
-                      <button
-                        onClick={() => handleToggleStatus(acc)}
-                        className={`px-2 py-1 rounded-lg text-xs font-semibold ${
-                          acc.status === 'pending' ? 'bg-blue-500 text-white hover:bg-blue-600' : 'bg-gray-300 text-gray-800 hover:bg-gray-400'
-                        } transition-colors duration-200`}
-                        title={acc.status === 'pending' ? 'ทำเครื่องหมายว่าชำระแล้ว' : 'ทำเครื่องหมายว่าค้างอยู่'}
-                      >
-                        {acc.status === 'pending' ? 'ชำระแล้ว' : 'ค้างอยู่'}
-                      </button>
-                      <button
-                        onClick={() => handleEditAccount(acc)}
-                        className="text-blue-600 hover:text-blue-800 transition-colors duration-200"
-                        title="แก้ไข"
-                      >
-                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-edit"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4Z"></path></svg>
-                      </button>
-                      <button
-                        onClick={() => handleDeleteAccount(acc.id)}
-                        className="text-red-600 hover:text-red-800 transition-colors duration-200"
-                        title="ลบ"
-                      >
-                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-trash-2"><path d="M3 6h18"></path><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path><line x1="10" x2="10" y1="11" y2="17"></line><line x1="14" x2="14" y1="11" y2="17"></line></svg>
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ) : (
-          <p className="text-gray-500 mt-4">ไม่มีรายการเจ้าหนี้-ลูกหนี้</p>
-        )}
-      </div>
-
-      {showModal && (
-        <Modal
-          message={modalMessage}
-          onConfirm={modalAction}
-          onCancel={() => setShowModal(false)}
-          showConfirmButton={typeof modalAction === 'function'}
-        />
-      )}
-    </div>
-  );
-}
-
-// Reports Component
-function Reports() {
-  const { db, userId, isAuthReady } = useAppContext();
-  const [transactions, setTransactions] = useState([]);
-  const [categories, setCategories] = useState([]);
-  const [selectedPeriod, setSelectedPeriod] = useState('monthly'); // 'daily', 'monthly', 'yearly'
-  const [reportData, setReportData] = useState([]); // Data for chart and summary
-  const [pnlData, setPnlData] = useState({ income: 0, expense: 0, profit: 0 });
-  const [budgetComparison, setBudgetComparison] = useState([]);
-
-  useEffect(() => {
-    if (db && userId && isAuthReady) {
-      // Fetch transactions
-      const transactionsRef = collection(db, `artifacts/${__app_id}/users/${userId}/transactions`);
-      const qTransactions = query(transactionsRef, orderBy('date', 'desc'));
-      const unsubscribeTransactions = onSnapshot(qTransactions, (snapshot) => {
-        const fetchedTransactions = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        setTransactions(fetchedTransactions);
-      }, (error) => {
-        console.error("Error fetching transactions for reports:", error);
-      });
-
-      // Fetch categories
-      const categoriesRef = collection(db, `artifacts/${__app_id}/users/${userId}/categories`);
-      const qCategories = query(categoriesRef, orderBy('name'));
-      const unsubscribeCategories = onSnapshot(qCategories, (snapshot) => {
-        const fetchedCategories = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        setCategories(fetchedCategories);
-      }, (error) => {
-        console.error("Error fetching categories:", error);
-      });
-
-      return () => {
-        unsubscribeTransactions();
-        unsubscribeCategories();
-      };
-    }
-  }, [db, userId, isAuthReady]);
-
-  useEffect(() => {
-    // Recalculate reports whenever transactions or categories change
-    generateReports(transactions, categories, selectedPeriod);
-  }, [transactions, categories, selectedPeriod]);
-
-  const generateReports = (txns, cats, period) => {
-    let summaryMap = new Map();
-    let totalIncome = 0;
-    let totalExpense = 0;
-    let categorySpending = new Map();
-
-    txns.forEach(txn => {
-      const amount = parseFloat(txn.amount);
-      let key;
-
-      if (period === 'daily') {
-        key = txn.date; // YYYY-MM-DD
-      } else if (period === 'monthly') {
-        key = txn.date.slice(0, 7); // YYYY-MM
-      } else { // 'yearly'
-        key = txn.date.slice(0, 4); // YYYY
-      }
-
-      if (!summaryMap.has(key)) {
-        summaryMap.set(key, { income: 0, expense: 0 });
-      }
-
-      const currentSummary = summaryMap.get(key);
-      if (txn.type === 'income') {
-        currentSummary.income += amount;
-        totalIncome += amount;
-      } else {
-        currentSummary.expense += amount;
-        totalExpense += amount;
-      }
-      summaryMap.set(key, currentSummary);
-
-      // Calculate spending by category for budget comparison
-      if (txn.type === 'expense') {
-        categorySpending.set(txn.category, (categorySpending.get(txn.category) || 0) + amount);
-      }
-    });
-
-    const sortedReportData = Array.from(summaryMap.entries())
-      .map(([periodKey, data]) => ({ name: periodKey, รายรับ: data.income, รายจ่าย: data.expense }))
-      .sort((a, b) => a.name.localeCompare(b.name)); // Sort by date/month/year
-
-    setReportData(sortedReportData);
-    setPnlData({
-      income: totalIncome,
-      expense: totalExpense,
-      profit: totalIncome - totalExpense,
-    });
-
-    // Calculate budget comparison
-    const budgetCompare = cats.map(cat => {
-      const actualSpent = categorySpending.get(cat.name) || 0;
-      return {
-        category: cat.name,
-        budget: cat.budget,
-        actualSpent: actualSpent,
-        remaining: cat.budget - actualSpent,
-        overBudget: actualSpent > cat.budget,
-      };
-    });
-    setBudgetComparison(budgetCompare);
-  };
-
-  const handleExport = (format) => {
-    // This is a placeholder. Actual implementation would involve:
-    // 1. Fetching all relevant data (transactions, categories, etc.)
-    // 2. Using a library (e.g., 'xlsx' for Excel, 'jspdf' for PDF) to generate the file.
-    // 3. Triggering a download.
-    alert(`ฟังก์ชันส่งออกข้อมูลเป็น ${format} กำลังอยู่ในระหว่างการพัฒนา`);
-    console.log(`Exporting data as ${format}...`);
-  };
-
-  const handleImport = () => {
-    // This is a placeholder. Actual implementation would involve:
-    // 1. Displaying a file input.
-    // 2. Reading the selected Excel/CSV file using a library (e.g., 'xlsx').
-    // 3. Parsing the data and validating it.
-    // 4. Batch writing the data to Firestore.
-    alert('ฟังก์ชันนำเข้าข้อมูลกำลังอยู่ในระหว่างการพัฒนา');
-    console.log('Importing data...');
-  };
-
-  return (
-    <div className="space-y-6">
-      <div className="bg-white p-6 rounded-xl shadow-lg border border-blue-200">
-        <h2 className="text-2xl font-bold text-blue-700 mb-4">สรุปผลและรายงาน</h2>
-
-        {/* Period Selection */}
-        <div className="mb-6 flex space-x-4">
-          <button
-            onClick={() => setSelectedPeriod('daily')}
-            className={`px-4 py-2 rounded-lg font-semibold transition-all duration-300 ${
-              selectedPeriod === 'daily' ? 'bg-blue-600 text-white shadow-md' : 'bg-blue-100 text-blue-700 hover:bg-blue-200'
-            }`}
-          >
-            รายวัน
-          </button>
-          <button
-            onClick={() => setSelectedPeriod('monthly')}
-            className={`px-4 py-2 rounded-lg font-semibold transition-all duration-300 ${
-              selectedPeriod === 'monthly' ? 'bg-blue-600 text-white shadow-md' : 'bg-blue-100 text-blue-700 hover:bg-blue-200'
-            }`}
-          >
-            รายเดือน
-          </button>
-          <button
-            onClick={() => setSelectedPeriod('yearly')}
-            className={`px-4 py-2 rounded-lg font-semibold transition-all duration-300 ${
-              selectedPeriod === 'yearly' ? 'bg-blue-600 text-white shadow-md' : 'bg-blue-100 text-blue-700 hover:bg-blue-200'
-            }`}
-          >
-            รายปี
-          </button>
-        </div>
-
-        {/* Income-Expense Chart */}
-        <div className="mb-6">
-          <h3 className="text-xl font-bold text-blue-600 mb-3">กราฟรายรับ-รายจ่าย ({selectedPeriod === 'daily' ? 'รายวัน' : selectedPeriod === 'monthly' ? 'รายเดือน' : 'รายปี'})</h3>
-          {reportData.length > 0 ? (
-            <ResponsiveContainer width="100%" height={300}>
-              <BarChart
-                data={reportData}
-                margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
-              >
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="name" />
-                <YAxis />
-                <Tooltip formatter={(value) => value.toLocaleString('th-TH', { style: 'currency', currency: 'THB' })} />
-                <Legend />
-                <Bar dataKey="รายรับ" fill="#4CAF50" /> {/* Green for income */}
-                <Bar dataKey="รายจ่าย" fill="#F44336" /> {/* Red for expense */}
-              </BarChart>
-            </ResponsiveContainer>
-          ) : (
-            <p className="text-gray-500">ไม่มีข้อมูลสำหรับสร้างกราฟในช่วงเวลาที่เลือก</p>
-          )}
-        </div>
-
-        {/* Profit & Loss Statement */}
-        <div className="mb-6 bg-blue-50 p-4 rounded-lg shadow-inner">
-          <h3 className="text-xl font-bold text-blue-600 mb-3">งบกำไรขาดทุน (P&L)</h3>
-          <div className="space-y-2">
-            <p className="flex justify-between text-lg font-medium">
-              <span>รายรับรวม:</span>
-              <span className="text-green-600">{pnlData.income.toLocaleString('th-TH', { style: 'currency', currency: 'THB' })}</span>
-            </p>
-            <p className="flex justify-between text-lg font-medium">
-              <span>รายจ่ายรวม:</span>
-              <span className="text-red-600">{pnlData.expense.toLocaleString('th-TH', { style: 'currency', currency: 'THB' })}</span>
-            </p>
-            <hr className="border-blue-200 my-2" />
-            <p className="flex justify-between text-2xl font-extrabold">
-              <span>กำไร/ขาดทุนสุทธิ:</span>
-              <span className={pnlData.profit >= 0 ? 'text-green-700' : 'text-red-700'}>
-                {pnlData.profit.toLocaleString('th-TH', { style: 'currency', currency: 'THB' })}
-              </span>
-            </p>
-          </div>
-        </div>
-
-        {/* Budget Comparison */}
-        <div className="mb-6">
-          <h3 className="text-xl font-bold text-blue-600 mb-3">เปรียบเทียบงบประมาณรายหมวดหมู่</h3>
-          {budgetComparison.length > 0 ? (
-            <div className="overflow-x-auto">
-              <table className="min-w-full bg-white border border-gray-200 rounded-lg">
-                <thead className="bg-blue-100">
-                  <tr>
-                    <th className="py-3 px-4 text-left text-sm font-semibold text-blue-700 rounded-tl-lg">หมวดหมู่</th>
-                    <th className="py-3 px-4 text-right text-sm font-semibold text-blue-700">งบประมาณ</th>
-                    <th className="py-3 px-4 text-right text-sm font-semibold text-blue-700">ใช้จ่ายจริง</th>
-                    <th className="py-3 px-4 text-right text-sm font-semibold text-blue-700">คงเหลือ</th>
-                    <th className="py-3 px-4 text-left text-sm font-semibold text-blue-700 rounded-tr-lg">สถานะ</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {budgetComparison.map((item, index) => (
-                    <tr key={index} className="border-b border-gray-200 hover:bg-blue-50">
-                      <td className="py-3 px-4 text-sm">{item.category}</td>
-                      <td className="py-3 px-4 text-right text-sm">
-                        {item.budget.toLocaleString('th-TH', { style: 'currency', currency: 'THB' })}
-                      </td>
-                      <td className="py-3 px-4 text-right text-sm">
-                        {item.actualSpent.toLocaleString('th-TH', { style: 'currency', currency: 'THB' })}
-                      </td>
-                      <td className={`py-3 px-4 text-right text-sm ${item.remaining >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                        {item.remaining.toLocaleString('th-TH', { style: 'currency', currency: 'THB' })}
-                      </td>
-                      <td className="py-3 px-4 text-sm">
-                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                          item.overBudget ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'
-                        }`}>
-                          {item.overBudget ? 'เกินงบ' : 'อยู่ในงบ'}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          ) : (
-            <p className="text-gray-500">ไม่มีข้อมูลหมวดหมู่หรือการใช้จ่ายสำหรับเปรียบเทียบงบประมาณ</p>
-          )}
-        </div>
-
-        {/* Import/Export Section */}
-        <div className="bg-blue-50 p-4 rounded-lg shadow-inner flex flex-col md:flex-row justify-between items-center space-y-4 md:space-y-0 md:space-x-4">
-          <h3 className="text-xl font-bold text-blue-600">นำเข้า/ส่งออกข้อมูล</h3>
-          <div className="flex space-x-3">
-            <button
-              onClick={() => handleExport('PDF')}
-              className="bg-blue-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-blue-700 transition-colors duration-300 shadow-md"
-            >
-              ส่งออก PDF
-            </button>
-            <button
-              onClick={() => handleExport('Excel')}
-              className="bg-blue-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-blue-700 transition-colors duration-300 shadow-md"
-            >
-              ส่งออก Excel
-            </button>
-            <button
-              onClick={handleImport}
-              className="bg-gray-300 text-gray-800 px-4 py-2 rounded-lg font-semibold hover:bg-gray-400 transition-colors duration-300 shadow-md"
-            >
-              นำเข้า CSV/Excel
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// New Others Component to combine Category Management and Accounts Payable/Receivable
-function Others() {
-  return (
-    <div className="space-y-8"> {/* Added space between sections */}
-      <CategoryManagement />
-      <AccountsPayableReceivable />
-    </div>
-  );
-}
-
-// Custom Modal Component (replaces alert/confirm)
-function Modal({ message, onConfirm, onCancel, showConfirmButton = true }) {
-  return (
-    <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex justify-center items-center z-50">
-      <div className="bg-white p-6 rounded-lg shadow-xl max-w-sm w-full text-center">
-        <p className="text-lg font-semibold text-gray-800 mb-4">{message}</p>
-        <div className="flex justify-center space-x-4">
-          {showConfirmButton && (
-            <button
-              onClick={() => { onConfirm(); }}
-              className="bg-blue-600 text-white px-5 py-2 rounded-lg hover:bg-blue-700 transition-colors duration-300"
-            >
-              ยืนยัน
-            </button>
-          )}
-          <button
-            onClick={onCancel}
-            className="bg-gray-300 text-gray-800 px-5 py-2 rounded-lg hover:bg-gray-400 transition-colors duration-300"
-          >
-            {showConfirmButton ? 'ยกเลิก' : 'ปิด'}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-export default App;
+            );
+        }
+
+        // Transaction List Component
+        function TransactionList({ transactions, categories, onEdit, onDelete }) {
+            const [searchTerm, setSearchTerm] = React.useState('');
+            const [filterType, setFilterType] = React.useState('all'); // 'all', 'income', 'expense'
+            const [filterCategory, setFilterCategory] = React.useState('all'); // 'all' or category name
+            const [startDate, setStartDate] = React.useState('');
+            const [endDate, setEndDate] = React.useState('');
+            const [sortBy, setSortBy] = React.useState('date');
+            const [sortOrder, setSortOrder] = React.useState('desc'); // 'asc' or 'desc'
+
+            const filteredTransactions = transactions.filter(txn => {
+                const matchesSearch = (txn.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                                      txn.category?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                                      txn.paymentMethod?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                                      txn.referenceNo?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                                      txn.payeePayer?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                                      txn.notes?.toLowerCase().includes(searchTerm.toLowerCase()));
+                const matchesType = filterType === 'all' || txn.type === filterType;
+                const matchesCategory = filterCategory === 'all' || txn.category === filterCategory;
+                const matchesDate = (!startDate || txn.date >= startDate) && (!endDate || txn.date <= endDate);
+
+                return matchesSearch && matchesType && matchesCategory && matchesDate;
+            }).sort((a, b) => {
+                let compareA, compareB;
+                if (sortBy === 'date') {
+                    compareA = new Date(a.date);
+                    compareB = new Date(b.date);
+                } else if (sortBy === 'amount') {
+                    compareA = parseFloat(a.amount);
+                    compareB = parseFloat(b.amount);
+                } else { // description, category, referenceNo, payeePayer, notes
+                    compareA = a[sortBy] ? a[sortBy].toLowerCase() : '';
+                    compareB = b[sortBy] ? b[sortBy].toLowerCase() : '';
+                }
+
+                if (compareA < compareB) return sortOrder === 'asc' ? -1 : 1;
+                if (compareA > compareB) return sortOrder === 'asc' ? 1 : -1;
+                return 0;
+            });
+
+            return (
+                <div className="bg-white p-6 rounded-xl shadow-lg border border-blue-200">
+                    <h2 className="text-2xl font-bold text-blue-700 mb-4">รายการบัญชีทั้งหมด</h2>
+
+                    {/* Filter and Search */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6 p-4 bg-blue-50 rounded-lg shadow-inner">
+                        <div>
+                            <label htmlFor="searchTerm" className="block text-sm font-medium text-gray-700 mb-1">ค้นหา</label>
+                            <input
+                                type="text"
+                                id="searchTerm"
+                                placeholder="ค้นหารายการ..."
+                                value={searchTerm}
+                                onChange={(e) => setSearchTerm(e.target.value)}
+                                className="w-full p-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+                            />
+                        </div>
+                        <div>
+                            <label htmlFor="filterType" className="block text-sm font-medium text-gray-700 mb-1">ประเภท</label>
+                            <select
+                                id="filterType"
+                                value={filterType}
+                                onChange={(e) => setFilterType(e.target.value)}
+                                className="w-full p-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+                            >
+                                <option value="all">ทั้งหมด</option>
+                                <option value="income">รายรับ</option>
+                                <option value="expense">รายจ่าย</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label htmlFor="filterCategory" className="block text-sm font-medium text-gray-700 mb-1">หมวดหมู่</label>
+                            <select
+                                id="filterCategory"
+                                value={filterCategory}
+                                onChange={(e) => setFilterCategory(e.target.value)}
+                                className="w-full p-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+                            >
+                                <option value="all">ทั้งหมด</option>
+                                {categories.map(cat => (
+                                    <option key={cat.id} value={cat.name}>{cat.name}</option>
+                                ))}
+                            </select>
+                        </div>
+                        <div className="flex space-x-2">
+                            <div className="flex-1">
+                                <label htmlFor="startDate" className="block text-sm font-medium text-gray-700 mb-1">จากวันที่</label>
+                                <input
+                                    type="date"
+                                    id="startDate"
+                                    value={startDate}
+                                    onChange={(e) => setStartDate(e.target.value)}
+                                    className="w-full p-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+                                />
+                            </div>
+                            <div className="flex-1">
+                                <label htmlFor="endDate" className="block text-sm font-medium text-gray-700 mb-1">ถึงวันที่</label>
+                                <input
+                                    type="date"
+                                    id="endDate"
+                                    value={endDate}
+                                    onChange={(e) => setEndDate(e.target.value)}
+                                    className="w-full p-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+                                />
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Sort Options */}
+                    <div className="flex items-center space-x-4 mb-4">
+                        <span className="text-sm font-medium text-gray-700">เรียงตาม:</span>
+                        <select
+                            value={sortBy}
+                            onChange={(e) => setSortBy(e.target.value)}
+                            className="p-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+                        >
+                            <option value="date">วันที่</option>
+                            <option value="amount">จำนวนเงิน</option>
+                            <option value="description">รายละเอียด</option>
+                            <option value="category">หมวดหมู่</option>
+                            <option value="referenceNo">เลขที่อ้างอิง</option>
+                            <option value="payeePayer">ผู้รับ/ผู้จ่าย</option>
+                        </select>
+                        <button
+                            onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
+                            className="p-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors duration-200"
+                        >
+                            {sortOrder === 'asc' ? 'น้อยไปมาก (▲)' : 'มากไปน้อย (▼)'}
+                        </button>
+                    </div>
+
+                    {/* Transaction Table */}
+                    {filteredTransactions.length > 0 ? (
+                        <div className="overflow-x-auto">
+                            <table className="min-w-full bg-white border border-gray-200 rounded-lg">
+                                <thead className="bg-blue-100">
+                                    <tr>
+                                        <th className="py-3 px-4 text-left text-sm font-semibold text-blue-700 rounded-tl-lg">วันที่</th>
+                                        <th className="py-3 px-4 text-left text-sm font-semibold text-blue-700">ประเภท</th>
+                                        <th className="py-3 px-4 text-left text-sm font-semibold text-blue-700">หมวดหมู่</th>
+                                        <th className="py-3 px-4 text-left text-sm font-semibold text-blue-700">รายละเอียด</th>
+                                        <th className="py-3 px-4 text-left text-sm font-semibold text-blue-700">ผู้รับ/ผู้จ่าย</th>
+                                        <th className="py-3 px-4 text-right text-sm font-semibold text-blue-700">จำนวนเงิน</th>
+                                        <th className="py-3 px-4 text-left text-sm font-semibold text-blue-700">วิธีการชำระ</th>
+                                        <th className="py-3 px-4 text-left text-sm font-semibold text-blue-700">เลขที่อ้างอิง</th>
+                                        <th className="py-3 px-4 text-left text-sm font-semibold text-blue-700">หมายเหตุ</th>
+                                        <th className="py-3 px-4 text-left text-sm font-semibold text-blue-700 rounded-tr-lg">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {filteredTransactions.map(txn => (
+                                        <tr key={txn.id} className="border-b border-gray-200 hover:bg-blue-50">
+                                            <td className="py-3 px-4 text-sm">{txn.date}</td>
+                                            <td className="py-3 px-4 text-sm">
+                                                <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                                    txn.type === 'income' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+                                                }`}>
+                                                    {txn.type === 'income' ? 'รายรับ' : 'รายจ่าย'}
+                                                </span>
+                                            </td>
+                                            <td className="py-3 px-4 text-sm">{txn.category}</td>
+                                            <td className="py-3 px-4 text-sm">{txn.description}</td>
+                                            <td className="py-3 px-4 text-sm">{txn.payeePayer}</td>
+                                            <td className={`py-3 px-4 text-right text-sm font-semibold ${txn.type === 'income' ? 'text-green-600' : 'text-red-600'}`}>
+                                                {parseFloat(txn.amount).toLocaleString('th-TH', { style: 'currency', currency: 'THB' })}
+                                            </td>
+                                            <td className="py-3 px-4 text-sm">{txn.paymentMethod}</td>
+                                            <td className="py-3 px-4 text-sm">{txn.referenceNo}</td>
+                                            <td className="py-3 px-4 text-sm max-w-xs overflow-hidden text-ellipsis whitespace-nowrap" title={txn.notes}>{txn.notes}</td>
+                                            <td className="py-3 px-4 text-sm flex space-x-2">
+                                                <button
+                                                    onClick={() => onEdit(txn)}
+                                                    className="text-blue-600 hover:text-blue-800 transition-colors duration-200"
+                                                    title="แก้ไข"
+                                                >
+                                                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-edit"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4Z"></path></svg>
+                                                </button>
+                                                <button
+                                                    onClick={() => onDelete(txn.id)}
+                                                    className="text-red-600 hover:text-red-800 transition-colors duration-200"
+                                                    title="ลบ"
+                                                >
+                                                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-trash-2"><path d="M3 6h18"></path><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path><line x1="10" x2="10" y1="11" y2="17"></line><line x1="14" x2="14" y1="11" y2="17"></line></svg>
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    ) : (
+                        <p className="text-gray-500 mt-4">ไม่มีรายการที่ตรงกับเงื่อนไข</p>
+                    )}
+                </div>
+            );
+        }
+
+        // Transactions View Component (Combines Form and List)
+        function Transactions() {
+            const { db, userId, isAuthReady } = useAppContext();
+            const [transactions, setTransactions] = React.useState([]);
+            const [categories, setCategories] = React.useState([]);
+            const [editingTransaction, setEditingTransaction] = React.useState(null);
+            const [showModal, setShowModal] = React.useState(false);
+            const [modalMessage, setModalMessage] = React.useState('');
+            const [modalAction, setModalAction] = React.useState(null); // Function to execute on confirm
+
+            React.useEffect(() => {
+                if (db && userId && isAuthReady) {
+                    const transactionsRef = collection(db, `artifacts/${window.__app_id}/users/${userId}/transactions`);
+                    const qTransactions = query(transactionsRef, orderBy('date', 'desc'));
+                    const unsubscribeTransactions = onSnapshot(qTransactions, (snapshot) => {
+                        const fetchedTransactions = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                        setTransactions(fetchedTransactions);
+                    }, (error) => {
+                        console.error("Error fetching transactions:", error);
+                    });
+
+                    const categoriesRef = collection(db, `artifacts/${window.__app_id}/users/${userId}/categories`);
+                    const qCategories = query(categoriesRef, orderBy('name'));
+                    const unsubscribeCategories = onSnapshot(qCategories, (snapshot) => {
+                        const fetchedCategories = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                        setCategories(fetchedCategories);
+                    }, (error) => {
+                        console.error("Error fetching categories:", error);
+                    });
+
+                    return () => {
+                        unsubscribeTransactions();
+                        unsubscribeCategories();
+                    };
+                }
+            }, [db, userId, isAuthReady]);
+
+            const handleSaveTransaction = async (transactionData) => {
+                if (!db || !userId) {
+                    console.error("Firestore DB or User ID not available.");
+                    return;
+                }
+                try {
+                    if (editingTransaction) {
+                        const transactionRef = doc(db, `artifacts/${window.__app_id}/users/${userId}/transactions`, editingTransaction.id);
+                        await updateDoc(transactionRef, transactionData);
+                        setEditingTransaction(null);
+                    } else {
+                        await addDoc(collection(db, `artifacts/${window.__app_id}/users/${userId}/transactions`), transactionData);
+                    }
+                } catch (error) {
+                    console.error("Error saving transaction:", error);
+                    throw error;
+                }
+            };
+
+            const handleEditTransaction = (txn) => {
+                setEditingTransaction(txn);
+            };
+
+            const handleDeleteTransaction = (id) => {
+                setModalMessage('คุณแน่ใจหรือไม่ว่าต้องการลบรายการนี้?');
+                setModalAction(() => async () => {
+                    if (!db || !userId) {
+                        console.error("Firestore DB or User ID not available.");
+                        return;
+                    }
+                    try {
+                        await deleteDoc(doc(db, `artifacts/${window.__app_id}/users/${userId}/transactions`, id));
+                        setModalMessage('รายการถูกลบสำเร็จ!');
+                        setTimeout(() => setShowModal(false), 1500);
+                    } catch (error) {
+                        console.error("Error deleting transaction:", error);
+                        setModalMessage('เกิดข้อผิดพลาดในการลบรายการ');
+                    }
+                });
+                setShowModal(true);
+            };
+
+            return (
+                <div className="space-y-6">
+                    <TransactionForm categories={categories} onSave={handleSaveTransaction} initialData={editingTransaction} />
+                    <TransactionList transactions={transactions} categories={categories} onEdit={handleEditTransaction} onDelete={handleDeleteTransaction} />
+
+                    {showModal && (
+                        <Modal
+                            message={modalMessage}
+                            onConfirm={modalAction}
+                            onCancel={() => setShowModal(false)}
+                            showConfirmButton={typeof modalAction === 'function'}
+                        />
+                    )}
+                </div>
+            );
+        }
+
+        // Category Management Component
+        function CategoryManagement() {
+            const { db, userId, isAuthReady } = useAppContext();
+            const [categories, setCategories] = React.useState([]);
+            const [newCategoryName, setNewCategoryName] = React.useState('');
+            const [newBudget, setNewBudget] = React.useState('');
+            const [message, setMessage] = React.useState({ text: '', type: '' });
+            const [editingCategory, setEditingCategory] = React.useState(null);
+            const [showModal, setShowModal] = React.useState(false);
+            const [modalMessage, setModalMessage] = React.useState('');
+            const [modalAction, setModalAction] = React.useState(null);
+
+            React.useEffect(() => {
+                if (db && userId && isAuthReady) {
+                    const q = query(collection(db, `artifacts/${window.__app_id}/users/${userId}/categories`), orderBy('name'));
+                    const unsubscribe = onSnapshot(q, (snapshot) => {
+                        const fetchedCategories = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                        setCategories(fetchedCategories);
+                    }, (error) => {
+                        console.error("Error fetching categories:", error);
+                    });
+                    return () => unsubscribe();
+                }
+            }, [db, userId, isAuthReady]);
+
+            const handleAddOrUpdateCategory = async (e) => {
+                e.preventDefault();
+                setMessage({ text: '', type: '' });
+
+                if (!newCategoryName.trim()) {
+                    setMessage({ text: 'กรุณากรอกชื่อหมวดหมู่', type: 'error' });
+                    return;
+                }
+                const budgetAmount = parseFloat(newBudget);
+                if (newBudget !== '' && (isNaN(budgetAmount) || budgetAmount < 0)) {
+                    setMessage({ text: 'งบประมาณไม่ถูกต้อง', type: 'error' });
+                    return;
+                }
+
+                const categoryData = {
+                    name: newCategoryName.trim(),
+                    budget: newBudget === '' ? 0 : budgetAmount,
+                    createdAt: new Date().toISOString(),
+                };
+
+                try {
+                    if (editingCategory) {
+                        const categoryRef = doc(db, `artifacts/${window.__app_id}/users/${userId}/categories`, editingCategory.id);
+                        await updateDoc(categoryRef, categoryData);
+                        setMessage({ text: 'อัปเดตหมวดหมู่สำเร็จ!', type: 'success' });
+                        setEditingCategory(null);
+                    } else {
+                        await addDoc(collection(db, `artifacts/${window.__app_id}/users/${userId}/categories`), categoryData);
+                        setMessage({ text: 'เพิ่มหมวดหมู่สำเร็จ!', type: 'success' });
+                    }
+                    setNewCategoryName('');
+                    setNewBudget('');
+                } catch (error) {
+                    console.error("Error saving category:", error);
+                    setMessage({ text: 'เกิดข้อผิดพลาดในการบันทึกหมวดหมู่', type: 'error' });
+                }
+            };
+
+            const handleEditCategory = (category) => {
+                setEditingCategory(category);
+                setNewCategoryName(category.name);
+                setNewBudget(category.budget.toString());
+            };
+
+            const handleDeleteCategory = (id) => {
+                setModalMessage('คุณแน่ใจหรือไม่ว่าต้องการลบหมวดหมู่นี้? รายการที่เกี่ยวข้องจะไม่ถูกลบอัตโนมัติ.');
+                setModalAction(() => async () => {
+                    if (!db || !userId) {
+                        console.error("Firestore DB or User ID not available.");
+                        return;
+                    }
+                    try {
+                        await deleteDoc(doc(db, `artifacts/${window.__app_id}/users/${userId}/categories`, id));
+                        setModalMessage('หมวดหมู่ถูกลบสำเร็จ!');
+                        setTimeout(() => setShowModal(false), 1500);
+                    } catch (error) {
+                        console.error("Error deleting category:", error);
+                        setModalMessage('เกิดข้อผิดพลาดในการลบหมวดหมู่');
+                    }
+                });
+                setShowModal(true);
+            };
+
+            return (
+                <div className="space-y-6">
+                    <div className="bg-white p-6 rounded-xl shadow-lg border border-blue-200">
+                        <h2 className="text-2xl font-bold text-blue-700 mb-4">{editingCategory ? 'แก้ไขหมวดหมู่' : 'เพิ่มหมวดหมู่ใหม่'}</h2>
+                        <form onSubmit={handleAddOrUpdateCategory} className="space-y-4">
+                            <div>
+                                <label htmlFor="categoryName" className="block text-sm font-medium text-gray-700 mb-1">ชื่อหมวดหมู่</label>
+                                <input
+                                    type="text"
+                                    id="categoryName"
+                                    value={newCategoryName}
+                                    onChange={(e) => setNewCategoryName(e.target.value)}
+                                    className="w-full p-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+                                    placeholder="เช่น ค่าเช่า, รายได้จากการขาย"
+                                    required
+                                />
+                            </div>
+                            <div>
+                                <label htmlFor="budget" className="block text-sm font-medium text-gray-700 mb-1">วงเงินงบประมาณ (ไม่บังคับ)</label>
+                                <input
+                                    type="number"
+                                    id="budget"
+                                    value={newBudget}
+                                    onChange={(e) => setNewBudget(e.target.value)}
+                                    className="w-full p-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+                                    step="0.01"
+                                    min="0"
+                                    placeholder="เช่น 10000 (0 ถ้าไม่มีงบประมาณ)"
+                                />
+                            </div>
+
+                            {message.text && (
+                                <div className={`p-3 rounded-lg text-sm ${message.type === 'success' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                                    {message.text}
+                                </div>
+                            )}
+
+                            <button
+                                type="submit"
+                                className="w-full bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700 transition-colors duration-300 shadow-md"
+                            >
+                                {editingCategory ? 'บันทึกการแก้ไข' : 'เพิ่มหมวดหมู่'}
+                            </button>
+                            {editingCategory && (
+                                <button
+                                    type="button"
+                                    onClick={() => { setEditingCategory(null); setNewCategoryName(''); setNewBudget(''); setMessage({ text: '', type: '' }); }}
+                                    className="w-full bg-gray-300 text-gray-800 py-3 rounded-lg font-semibold hover:bg-gray-400 transition-colors duration-300 shadow-md mt-2"
+                                >
+                                    ยกเลิกการแก้ไข
+                                </button>
+                            )}
+                        </form>
+                    </div>
+
+                    <div className="bg-white p-6 rounded-xl shadow-lg border border-blue-200">
+                        <h2 className="text-2xl font-bold text-blue-700 mb-4">หมวดหมู่ทั้งหมด</h2>
+                        {categories.length > 0 ? (
+                            <div className="overflow-x-auto">
+                                <table className="min-w-full bg-white border border-gray-200 rounded-lg">
+                                    <thead className="bg-blue-100">
+                                        <tr>
+                                            <th className="py-3 px-4 text-left text-sm font-semibold text-blue-700 rounded-tl-lg">ชื่อหมวดหมู่</th>
+                                            <th className="py-3 px-4 text-right text-sm font-semibold text-blue-700">วงเงินงบประมาณ</th>
+                                            <th className="py-3 px-4 text-left text-sm font-semibold text-blue-700 rounded-tr-lg">Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {categories.map(cat => (
+                                            <tr key={cat.id} className="border-b border-gray-200 hover:bg-blue-50">
+                                                <td className="py-3 px-4 text-sm">{cat.name}</td>
+                                                <td className="py-3 px-4 text-right text-sm">
+                                                    {parseFloat(cat.budget).toLocaleString('th-TH', { style: 'currency', currency: 'THB' })}
+                                                </td>
+                                                <td className="py-3 px-4 text-sm flex space-x-2">
+                                                    <button
+                                                        onClick={() => handleEditCategory(cat)}
+                                                        className="text-blue-600 hover:text-blue-800 transition-colors duration-200"
+                                                        title="แก้ไข"
+                                                    >
+                                                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-edit"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4Z"></path></svg>
+                                                    </button>
+                                                    <button
+                                                        onClick={() => handleDeleteCategory(cat.id)}
+                                                        className="text-red-600 hover:text-red-800 transition-colors duration-200"
+                                                        title="ลบ"
+                                                    >
+                                                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-trash-2"><path d="M3 6h18"></path><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path><line x1="10" x2="10" y1="11" y2="17"></line><line x1="14" x2="14" y1="11" y2="17"></line></svg>
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        ) : (
+                            <p className="text-gray-500">ยังไม่มีหมวดหมู่</p>
+                        )}
+                    </div>
+
+                    {showModal && (
+                        <Modal
+                            message={modalMessage}
+                            onConfirm={modalAction}
+                            onCancel={() => setShowModal(false)}
+                            showConfirmButton={typeof modalAction === 'function'}
+                        />
+                    )}
+                </div>
+            );
+        }
+
+        // Accounts Payable/Receivable Component
+        function AccountsPayableReceivable() {
+            const { db, userId, isAuthReady } = useAppContext();
+            const [accounts, setAccounts] = React.useState([]);
+            const [type, setType] = React.useState('payable'); // 'payable' or 'receivable'
+            const [description, setDescription] = React.useState('');
+            const [amount, setAmount] = React.useState('');
+            const [dueDate, setDueDate] = React.useState('');
+            const [message, setMessage] = React.useState({ text: '', type: '' });
+            const [editingAccount, setEditingAccount] = React.useState(null);
+            const [showModal, setShowModal] = React.useState(false);
+            const [modalMessage, setModalMessage] = React.useState('');
+            const [modalAction, setModalAction] = React.useState(null);
+
+            React.useEffect(() => {
+                if (db && userId && isAuthReady) {
+                    const q = query(collection(db, `artifacts/${window.__app_id}/users/${userId}/accounts`), orderBy('dueDate'));
+                    const unsubscribe = onSnapshot(q, (snapshot) => {
+                        const fetchedAccounts = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                        setAccounts(fetchedAccounts);
+                    }, (error) => {
+                        console.error("Error fetching accounts:", error);
+                    });
+                    return () => unsubscribe();
+                }
+            }, [db, userId, isAuthReady]);
+
+            const handleAddOrUpdateAccount = async (e) => {
+                e.preventDefault();
+                setMessage({ text: '', type: '' });
+
+                if (!description.trim() || !amount || !dueDate) {
+                    setMessage({ text: 'กรุณากรอกข้อมูลให้ครบถ้วน', type: 'error' });
+                    return;
+                }
+                const accAmount = parseFloat(amount);
+                if (isNaN(accAmount) || accAmount <= 0) {
+                    setMessage({ text: 'จำนวนเงินไม่ถูกต้อง', type: 'error' });
+                    return;
+                }
+
+                const accountData = {
+                    type,
+                    description: description.trim(),
+                    amount: accAmount,
+                    dueDate,
+                    status: 'pending', // 'pending' or 'paid'
+                    createdAt: new Date().toISOString(),
+                };
+
+                try {
+                    if (editingAccount) {
+                        const accountRef = doc(db, `artifacts/${window.__app_id}/users/${userId}/accounts`, editingAccount.id);
+                        await updateDoc(accountRef, accountData);
+                        setMessage({ text: 'อัปเดตรายการสำเร็จ!', type: 'success' });
+                        setEditingAccount(null);
+                    } else {
+                        await addDoc(collection(db, `artifacts/${window.__app_id}/users/${userId}/accounts`), accountData);
+                        setMessage({ text: 'เพิ่มรายการสำเร็จ!', type: 'success' });
+                    }
+                    setType('payable');
+                    setDescription('');
+                    setAmount('');
+                    setDueDate('');
+                } catch (error) {
+                    console.error("Error saving account:", error);
+                    setMessage({ text: 'เกิดข้อผิดพลาดในการบันทึกรายการ', type: 'error' });
+                }
+            };
+
+            const handleEditAccount = (account) => {
+                setEditingAccount(account);
+                setType(account.type);
+                setDescription(account.description);
+                setAmount(account.amount.toString());
+                setDueDate(account.dueDate);
+            };
+
+            const handleDeleteAccount = (id) => {
+                setModalMessage('คุณแน่ใจหรือไม่ว่าต้องการลบรายการนี้?');
+                setModalAction(() => async () => {
+                    if (!db || !userId) {
+                        console.error("Firestore DB or User ID not available.");
+                        return;
+                    }
+                    try {
+                        await deleteDoc(doc(db, `artifacts/${window.__app_id}/users/${userId}/accounts`, id));
+                        setModalMessage('รายการถูกลบสำเร็จ!');
+                        setTimeout(() => setShowModal(false), 1500);
+                    } catch (error) {
+                        console.error("Error deleting account:", error);
+                        setModalMessage('เกิดข้อผิดพลาดในการลบรายการ');
+                    }
+                });
+                setShowModal(true);
+            };
+
+            const handleToggleStatus = async (account) => {
+                if (!db || !userId) {
+                    console.error("Firestore DB or User ID not available.");
+                    return;
+                }
+                const newStatus = account.status === 'pending' ? 'paid' : 'pending';
+                try {
+                    const accountRef = doc(db, `artifacts/${window.__app_id}/users/${userId}/accounts`, account.id);
+                    await updateDoc(accountRef, { status: newStatus });
+                    setMessage({ text: `สถานะเปลี่ยนเป็น ${newStatus === 'paid' ? 'ชำระแล้ว' : 'ค้างอยู่'}`, type: 'success' });
+                } catch (error) {
+                    console.error("Error updating account status:", error);
+                    setMessage({ text: 'เกิดข้อผิดพลาดในการอัปเดตสถานะ', type: 'error' });
+                }
+            };
+
+            return (
+                <div className="space-y-6">
+                    <div className="bg-white p-6 rounded-xl shadow-lg border border-blue-200">
+                        <h2 className="text-2xl font-bold text-blue-700 mb-4">{editingAccount ? 'แก้ไขรายการเจ้าหนี้-ลูกหนี้' : 'เพิ่มรายการเจ้าหนี้-ลูกหนี้ใหม่'}</h2>
+                        <form onSubmit={handleAddOrUpdateAccount} className="space-y-4">
+                            <div>
+                                <label htmlFor="accountType" className="block text-sm font-medium text-gray-700 mb-1">ประเภท</label>
+                                <select
+                                    id="accountType"
+                                    value={type}
+                                    onChange={(e) => setType(e.target.value)}
+                                    className="w-full p-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+                                >
+                                    <option value="payable">ค้างจ่าย (เจ้าหนี้)</option>
+                                    <option value="receivable">ค้างรับ (ลูกหนี้)</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label htmlFor="accountDescription" className="block text-sm font-medium text-gray-700 mb-1">รายละเอียดรายการ</label>
+                                <input
+                                    type="text"
+                                    id="accountDescription"
+                                    value={description}
+                                    onChange={(e) => setDescription(e.target.value)}
+                                    className="w-full p-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+                                    placeholder="เช่น ค่าสินค้าจาก Supplier A, ลูกค้า B ค้างชำระ"
+                                    required
+                                />
+                            </div>
+                            <div>
+                                <label htmlFor="accountAmount" className="block text-sm font-medium text-gray-700 mb-1">จำนวนเงิน</label>
+                                <input
+                                    type="number"
+                                    id="accountAmount"
+                                    value={amount}
+                                    onChange={(e) => setAmount(e.target.value)}
+                                    className="w-full p-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+                                    step="0.01"
+                                    min="0.01"
+                                    required
+                                />
+                            </div>
+                            <div>
+                                <label htmlFor="dueDate" className="block text-sm font-medium text-gray-700 mb-1">วันครบกำหนดชำระ</label>
+                                <input
+                                    type="date"
+                                    id="dueDate"
+                                    value={dueDate}
+                                    onChange={(e) => setDueDate(e.target.value)}
+                                    className="w-full p-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
+                                    required
+                                />
+                            </div>
+
+                            {message.text && (
+                                <div className={`p-3 rounded-lg text-sm ${message.type === 'success' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                                    {message.text}
+                                </div>
+                            )}
+
+                            <button
+                                type="submit"
+                                className="w-full bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700 transition-colors duration-300 shadow-md"
+                            >
+                                {editingAccount ? 'บันทึกการแก้ไข' : 'เพิ่มรายการ'}
+                            </button>
+                            {editingAccount && (
+                                <button
+                                    type="button"
+                                    onClick={() => { setEditingAccount(null); setType('payable'); setDescription(''); setAmount(''); setDueDate(''); setMessage({ text: '', type: '' }); }}
+                                    className="w-full bg-gray-300 text-gray-800 py-3 rounded-lg font-semibold hover:bg-gray-400 transition-colors duration-300 shadow-md mt-2"
+                                >
+                                    ยกเลิกการแก้ไข
+                                </button>
+                            )}
+                        </form>
+                    </div>
+
+                    <div className="bg-white p-6 rounded-xl shadow-lg border border-blue-200">
+                        <h2 className="text-2xl font-bold text-blue-700 mb-4">รายการเจ้าหนี้-ลูกหนี้</h2>
+                        {accounts.length > 0 ? (
+                            <div className="overflow-x-auto">
+                                <table className="min-w-full bg-white border border-gray-200 rounded-lg">
+                                    <thead className="bg-blue-100">
+                                        <tr>
+                                            <th className="py-3 px-4 text-left text-sm font-semibold text-blue-700 rounded-tl-lg">ประเภท</th>
+                                            <th className="py-3 px-4 text-left text-sm font-semibold text-blue-700">รายละเอียด</th>
+                                            <th className="py-3 px-4 text-right text-sm font-semibold text-blue-700">จำนวนเงิน</th>
+                                            <th className="py-3 px-4 text-left text-sm font-semibold text-blue-700">วันครบกำหนด</th>
+                                            <th className="py-3 px-4 text-left text-sm font-semibold text-blue-700">สถานะ</th>
+                                            <th className="py-3 px-4 text-left text-sm font-semibold text-blue-700 rounded-tr-lg">Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {accounts.map(acc => (
+                                            <tr key={acc.id} className="border-b border-gray-200 hover:bg-blue-50">
+                                                <td className="py-3 px-4 text-sm">
+                                                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                                        acc.type === 'payable' ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'
+                                                    }`}>
+                                                        {acc.type === 'payable' ? 'ค้างจ่าย' : 'ค้างรับ'}
+                                                    </span>
+                                                </td>
+                                                <td className="py-3 px-4 text-sm">{acc.description}</td>
+                                                <td className="py-3 px-4 text-right text-sm font-semibold">
+                                                    {parseFloat(acc.amount).toLocaleString('th-TH', { style: 'currency', currency: 'THB' })}
+                                                </td>
+                                                <td className="py-3 px-4 text-sm">{acc.dueDate}</td>
+                                                <td className="py-3 px-4 text-sm">
+                                                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                                        acc.status === 'pending' ? 'bg-yellow-100 text-yellow-700' : 'bg-blue-100 text-blue-700'
+                                                    }`}>
+                                                        {acc.status === 'pending' ? 'ค้างอยู่' : 'ชำระแล้ว'}
+                                                    </span>
+                                                </td>
+                                                <td className="py-3 px-4 text-sm flex space-x-2">
+                                                    <button
+                                                        onClick={() => handleToggleStatus(acc)}
+                                                        className={`px-2 py-1 rounded-lg text-xs font-semibold ${
+                                                            acc.status === 'pending' ? 'bg-blue-500 text-white hover:bg-blue-600' : 'bg-gray-300 text-gray-800 hover:bg-gray-400'
+                                                        } transition-colors duration-200`}
+                                                        title={acc.status === 'pending' ? 'ทำเครื่องหมายว่าชำระแล้ว' : 'ทำเครื่องหมายว่าค้างอยู่'}
+                                                    >
+                                                        {acc.status === 'pending' ? 'ชำระแล้ว' : 'ค้างอยู่'}
+                                                    </button>
+                                                    <button
+                                                        onClick={() => handleEditAccount(acc)}
+                                                        className="text-blue-600 hover:text-blue-800 transition-colors duration-200"
+                                                        title="แก้ไข"
+                                                    >
+                                                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-edit"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4Z"></path></svg>
+                                                    </button>
+                                                    <button
+                                                        onClick={() => handleDeleteAccount(acc.id)}
+                                                        className="text-red-600 hover:text-red-800 transition-colors duration-200"
+                                                        title="ลบ"
+                                                    >
+                                                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-trash-2"><path d="M3 6h18"></path><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path><line x1="10" x2="10" y1="11" y2="17"></line><line x1="14" x2="14" y1="11" y2="17"></line></svg>
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        ) : (
+                            <p className="text-gray-500 mt-4">ไม่มีรายการเจ้าหนี้-ลูกหนี้</p>
+                        )}
+                    </div>
+
+                    {showModal && (
+                        <Modal
+                            message={modalMessage}
+                            onConfirm={modalAction}
+                            onCancel={() => setShowModal(false)}
+                            showConfirmButton={typeof modalAction === 'function'}
+                        />
+                    )}
+                </div>
+            );
+        }
+
+        // Reports Component
+        function Reports() {
+            const { db, userId, isAuthReady } = useAppContext();
+            const [transactions, setTransactions] = React.useState([]);
+            const [categories, setCategories] = React.useState([]);
+            const [selectedPeriod, setSelectedPeriod] = React.useState('monthly'); // 'daily', 'monthly', 'yearly'
+            const [reportData, setReportData] = React.useState([]); // Data for chart and summary
+            const [pnlData, setPnlData] = React.useState({ income: 0, expense: 0, profit: 0 });
+            const [budgetComparison, setBudgetComparison] = React.useState([]);
+
+            React.useEffect(() => {
+                if (db && userId && isAuthReady) {
+                    const transactionsRef = collection(db, `artifacts/${window.__app_id}/users/${userId}/transactions`);
+                    const qTransactions = query(transactionsRef, orderBy('date', 'desc'));
+                    const unsubscribeTransactions = onSnapshot(qTransactions, (snapshot) => {
+                        const fetchedTransactions = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                        setTransactions(fetchedTransactions);
+                    }, (error) => {
+                        console.error("Error fetching transactions for reports:", error);
+                    });
+
+                    const categoriesRef = collection(db, `artifacts/${window.__app_id}/users/${userId}/categories`);
+                    const qCategories = query(categoriesRef, orderBy('name'));
+                    const unsubscribeCategories = onSnapshot(qCategories, (snapshot) => {
+                        const fetchedCategories = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                        setCategories(fetchedCategories);
+                    }, (error) => {
+                        console.error("Error fetching categories:", error);
+                    });
+
+                    return () => {
+                        unsubscribeTransactions();
+                        unsubscribeCategories();
+                    };
+                }
+            }, [db, userId, isAuthReady]);
+
+            React.useEffect(() => {
+                generateReports(transactions, categories, selectedPeriod);
+            }, [transactions, categories, selectedPeriod]);
+
+            const generateReports = (txns, cats, period) => {
+                let summaryMap = new Map();
+                let totalIncome = 0;
+                let totalExpense = 0;
+                let categorySpending = new Map();
+
+                txns.forEach(txn => {
+                    const amount = parseFloat(txn.amount);
+                    let key;
+
+                    if (period === 'daily') {
+                        key = txn.date; // YYYY-MM-DD
+                    } else if (period === 'monthly') {
+                        key = txn.date.slice(0, 7); // YYYY-MM
+                    } else { // 'yearly'
+                        key = txn.date.slice(0, 4); // YYYY
+                    }
+
+                    if (!summaryMap.has(key)) {
+                        summaryMap.set(key, { income: 0, expense: 0 });
+                    }
+
+                    const currentSummary = summaryMap.get(key);
+                    if (txn.type === 'income') {
+                        currentSummary.income += amount;
+                        totalIncome += amount;
+                    } else {
+                        currentSummary.expense += amount;
+                        totalExpense += amount;
+                    }
+                    summaryMap.set(key, currentSummary);
+
+                    if (txn.type === 'expense') {
+                        categorySpending.set(txn.category, (categorySpending.get(txn.category) || 0) + amount);
+                    }
+                });
+
+                const sortedReportData = Array.from(summaryMap.entries())
+                    .map(([periodKey, data]) => ({ name: periodKey, รายรับ: data.income, รายจ่าย: data.expense }))
+                    .sort((a, b) => a.name.localeCompare(b.name));
+
+                setReportData(sortedReportData);
+                setPnlData({
+                    income: totalIncome,
+                    expense: totalExpense,
+                    profit: totalIncome - totalExpense,
+                });
+
+                const budgetCompare = cats.map(cat => {
+                    const actualSpent = categorySpending.get(cat.name) || 0;
+                    return {
+                        category: cat.name,
+                        budget: cat.budget,
+                        actualSpent: actualSpent,
+                        remaining: cat.budget - actualSpent,
+                        overBudget: actualSpent > cat.budget,
+                    };
+                });
+                setBudgetComparison(budgetCompare);
+            };
+
+            const handleExport = (format) => {
+                alert(`ฟังก์ชันส่งออกข้อมูลเป็น ${format} กำลังอยู่ในระหว่างการพัฒนา`);
+                console.log(`Exporting data as ${format}...`);
+            };
+
+            const handleImport = () => {
+                alert('ฟังก์ชันนำเข้าข้อมูลกำลังอยู่ในระหว่างการพัฒนา');
+                console.log('Importing data...');
+            };
+
+            return (
+                <div className="space-y-6">
+                    <div className="bg-white p-6 rounded-xl shadow-lg border border-blue-200">
+                        <h2 className="text-2xl font-bold text-blue-700 mb-4">สรุปผลและรายงาน</h2>
+
+                        {/* Period Selection */}
+                        <div className="mb-6 flex space-x-4">
+                            <button
+                                onClick={() => setSelectedPeriod('daily')}
+                                className={`px-4 py-2 rounded-lg font-semibold transition-all duration-300 ${
+                                    selectedPeriod === 'daily' ? 'bg-blue-600 text-white shadow-md' : 'bg-blue-100 text-blue-700 hover:bg-blue-200'
+                                }`}
+                            >
+                                รายวัน
+                            </button>
+                            <button
+                                onClick={() => setSelectedPeriod('monthly')}
+                                className={`px-4 py-2 rounded-lg font-semibold transition-all duration-300 ${
+                                    selectedPeriod === 'monthly' ? 'bg-blue-600 text-white shadow-md' : 'bg-blue-100 text-blue-700 hover:bg-blue-200'
+                                }`}
+                            >
+                                รายเดือน
+                            </button>
+                            <button
+                                onClick={() => setSelectedPeriod('yearly')}
+                                className={`px-4 py-2 rounded-lg font-semibold transition-all duration-300 ${
+                                    selectedPeriod === 'yearly' ? 'bg-blue-600 text-white shadow-md' : 'bg-blue-100 text-blue-700 hover:bg-blue-200'
+                                }`}
+                            >
+                                รายปี
+                            </button>
+                        </div>
+
+                        {/* Income-Expense Chart */}
+                        <div className="mb-6">
+                            <h3 className="text-xl font-bold text-blue-600 mb-3">กราฟรายรับ-รายจ่าย ({selectedPeriod === 'daily' ? 'รายวัน' : selectedPeriod === 'monthly' ? 'รายเดือน' : 'รายปี'})</h3>
+                            {reportData.length > 0 ? (
+                                <ResponsiveContainer width="100%" height={300}>
+                                    <Recharts.BarChart
+                                        data={reportData}
+                                        margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
+                                    >
+                                        <Recharts.CartesianGrid strokeDasharray="3 3" />
+                                        <Recharts.XAxis dataKey="name" />
+                                        <Recharts.YAxis />
+                                        <Recharts.Tooltip formatter={(value) => value.toLocaleString('th-TH', { style: 'currency', currency: 'THB' })} />
+                                        <Recharts.Legend />
+                                        <Recharts.Bar dataKey="รายรับ" fill="#4CAF50" />
+                                        <Recharts.Bar dataKey="รายจ่าย" fill="#F44336" />
+                                    </Recharts.BarChart>
+                                </ResponsiveContainer>
+                            ) : (
+                                <p className="text-gray-500">ไม่มีข้อมูลสำหรับสร้างกราฟในช่วงเวลาที่เลือก</p>
+                            )}
+                        </div>
+
+                        {/* Profit & Loss Statement */}
+                        <div className="mb-6 bg-blue-50 p-4 rounded-lg shadow-inner">
+                            <h3 className="text-xl font-bold text-blue-600 mb-3">งบกำไรขาดทุน (P&L)</h3>
+                            <div className="space-y-2">
+                                <p className="flex justify-between text-lg font-medium">
+                                    <span>รายรับรวม:</span>
+                                    <span className="text-green-600">{pnlData.income.toLocaleString('th-TH', { style: 'currency', currency: 'THB' })}</span>
+                                </p>
+                                <p className="flex justify-between text-lg font-medium">
+                                    <span>รายจ่ายรวม:</span>
+                                    <span className="text-red-600">{pnlData.expense.toLocaleString('th-TH', { style: 'currency', currency: 'THB' })}</span>
+                                </p>
+                                <hr className="border-blue-200 my-2" />
+                                <p className="flex justify-between text-2xl font-extrabold">
+                                    <span>กำไร/ขาดทุนสุทธิ:</span>
+                                    <span className={pnlData.profit >= 0 ? 'text-green-700' : 'text-red-700'}>
+                                        {pnlData.profit.toLocaleString('th-TH', { style: 'currency', currency: 'THB' })}
+                                    </span>
+                                </p>
+                            </div>
+                        </div>
+
+                        {/* Budget Comparison */}
+                        <div className="mb-6">
+                            <h3 className="text-xl font-bold text-blue-600 mb-3">เปรียบเทียบงบประมาณรายหมวดหมู่</h3>
+                            {budgetComparison.length > 0 ? (
+                                <div className="overflow-x-auto">
+                                    <table className="min-w-full bg-white border border-gray-200 rounded-lg">
+                                        <thead className="bg-blue-100">
+                                            <tr>
+                                                <th className="py-3 px-4 text-left text-sm font-semibold text-blue-700 rounded-tl-lg">หมวดหมู่</th>
+                                                <th className="py-3 px-4 text-right text-sm font-semibold text-blue-700">งบประมาณ</th>
+                                                <th className="py-3 px-4 text-right text-sm font-semibold text-blue-700">ใช้จ่ายจริง</th>
+                                                <th className="py-3 px-4 text-right text-sm font-semibold text-blue-700">คงเหลือ</th>
+                                                <th className="py-3 px-4 text-left text-sm font-semibold text-blue-700 rounded-tr-lg">สถานะ</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {budgetComparison.map((item, index) => (
+                                                <tr key={index} className="border-b border-gray-200 hover:bg-blue-50">
+                                                    <td className="py-3 px-4 text-sm">{item.category}</td>
+                                                    <td className="py-3 px-4 text-right text-sm">
+                                                        {item.budget.toLocaleString('th-TH', { style: 'currency', currency: 'THB' })}
+                                                    </td>
+                                                    <td className="py-3 px-4 text-right text-sm">
+                                                        {item.actualSpent.toLocaleString('th-TH', { style: 'currency', currency: 'THB' })}
+                                                    </td>
+                                                    <td className={`py-3 px-4 text-right text-sm ${item.remaining >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                                        {item.remaining.toLocaleString('th-TH', { style: 'currency', currency: 'THB' })}
+                                                    </td>
+                                                    <td className="py-3 px-4 text-sm">
+                                                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                                            item.overBudget ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'
+                                                        }`}>
+                                                            {item.overBudget ? 'เกินงบ' : 'อยู่ในงบ'}
+                                                        </span>
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            ) : (
+                                <p className="text-gray-500">ไม่มีข้อมูลหมวดหมู่หรือการใช้จ่ายสำหรับเปรียบเทียบงบประมาณ</p>
+                            )}
+                        </div>
+
+                        {/* Import/Export Section */}
+                        <div className="bg-blue-50 p-4 rounded-lg shadow-inner flex flex-col md:flex-row justify-between items-center space-y-4 md:space-y-0 md:space-x-4">
+                            <h3 className="text-xl font-bold text-blue-600">นำเข้า/ส่งออกข้อมูล</h3>
+                            <div className="flex space-x-3">
+                                <button
+                                    onClick={() => handleExport('PDF')}
+                                    className="bg-blue-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-blue-700 transition-colors duration-300 shadow-md"
+                                >
+                                    ส่งออก PDF
+                                </button>
+                                <button
+                                    onClick={() => handleExport('Excel')}
+                                    className="bg-blue-600 text-white px-4 py-2 rounded-lg font-semibold hover:bg-blue-700 transition-colors duration-300 shadow-md"
+                                >
+                                    ส่งออก Excel
+                                </button>
+                                <button
+                                    onClick={handleImport}
+                                    className="bg-gray-300 text-gray-800 px-4 py-2 rounded-lg font-semibold hover:bg-gray-400 transition-colors duration-300 shadow-md"
+                                >
+                                    นำเข้า CSV/Excel
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        // New Others Component to combine Category Management and Accounts Payable/Receivable
+        function Others() {
+            return (
+                <div className="space-y-8">
+                    <CategoryManagement />
+                    <AccountsPayableReceivable />
+                </div>
+            );
+        }
+
+        // Custom Modal Component (replaces alert/confirm)
+        function Modal({ message, onConfirm, onCancel, showConfirmButton = true }) {
+            return (
+                <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex justify-center items-center z-50">
+                    <div className="bg-white p-6 rounded-lg shadow-xl max-w-sm w-full text-center">
+                        <p className="text-lg font-semibold text-gray-800 mb-4">{message}</p>
+                        <div className="flex justify-center space-x-4">
+                            {showConfirmButton && (
+                                <button
+                                    onClick={() => { onConfirm(); }}
+                                    className="bg-blue-600 text-white px-5 py-2 rounded-lg hover:bg-blue-700 transition-colors duration-300"
+                                >
+                                    ยืนยัน
+                                </button>
+                            )}
+                            <button
+                                onClick={onCancel}
+                                className="bg-gray-300 text-gray-800 px-5 py-2 rounded-lg hover:bg-gray-400 transition-colors duration-300"
+                            >
+                                {showConfirmButton ? 'ยกเลิก' : 'ปิด'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        // Render the App component into the root div
+        ReactDOM.render(<App />, document.getElementById('root'));
+    </script>
+</body>
+</html>
