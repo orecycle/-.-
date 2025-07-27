@@ -184,27 +184,78 @@
                 <line x1="17.5" x2="17.5" y1="6.5" y2="6.5"/>
             </svg>
         );
-    
+
+        // Welcome Modal Component
+        function WelcomeModal({ imageUrl, linkUrl, onClose }) {
+            const handleImageClick = () => {
+                if (linkUrl) {
+                    window.open(linkUrl, '_blank'); // Open link in new tab
+                }
+            };
+
+            return (
+                <div className="fixed inset-0 bg-gray-600 bg-opacity-75 flex items-center justify-center p-4 z-50">
+                    <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full relative overflow-hidden">
+                        {/* Close button */}
+                        <button
+                            onClick={onClose}
+                            className="absolute top-3 right-3 text-gray-500 hover:text-gray-800 transition z-10 bg-white rounded-full p-1"
+                        >
+                            <XCircleIcon size={24} />
+                        </button>
+                        {/* Image */}
+                        <img
+                            src={imageUrl}
+                            alt="Welcome Promotion"
+                            className="w-full h-auto object-cover cursor-pointer"
+                            onClick={handleImageClick}
+                            onError={(e) => {
+                                e.target.onerror = null;
+                                e.target.src = `https://placehold.co/800x400/CCCCCC/333333?text=Welcome+Image+Error`;
+                            }}
+                        />
+                    </div>
+                </div>
+            );
+        }
+
 
         // Main App Component
         function App() {
           const [currentPage, setCurrentPage] = useState('home');
           const [message, setMessage] = useState('');
           const [showMessageModal, setShowMessageModal] = useState(false);
-          const [showWelcomeModal, setShowWelcomeModal] = useState(true); // State to control welcome modal visibility
+          // Initialize showWelcomeModal based on localStorage
+          const [showWelcomeModal, setShowWelcomeModal] = useState(
+            localStorage.getItem('welcomeModalClosed') !== 'true'
+          );
 
           const showMessage = (msg) => {
             setMessage(msg);
             setShowMessageModal(true);
           };
 
-          // Effect to show welcome modal after a short delay
+          // Effect to show welcome modal after a short delay, only if not explicitly closed
           useEffect(() => {
-            const timer = setTimeout(() => {
-              setShowWelcomeModal(true);
-            }, 1000); // Show modal after 1 second
-            return () => clearTimeout(timer);
+            if (localStorage.getItem('welcomeModalClosed') !== 'true') {
+              const timer = setTimeout(() => {
+                setShowWelcomeModal(true);
+              }, 1000); // Show modal after 1 second
+              return () => clearTimeout(timer);
+            }
           }, []);
+
+          // Function to handle closing the welcome modal
+          const handleCloseWelcomeModal = () => {
+            setShowWelcomeModal(false);
+            localStorage.setItem('welcomeModalClosed', 'true'); // Mark as closed in localStorage
+          };
+
+          // Function to re-enable the welcome modal (e.g., from a button in the footer)
+          const handleReopenWelcomeModal = () => {
+            localStorage.removeItem('welcomeModalClosed'); // Remove the closed flag
+            setShowWelcomeModal(true); // Show the modal immediately
+          };
 
           // User ID is now just a placeholder as there's no real authentication
           const userId = 'local-user';
@@ -229,9 +280,9 @@
               {/* Welcome Modal */}
               {showWelcomeModal && (
                 <WelcomeModal
-                  imageUrl="http://googleusercontent.com/file_content/1" // URL ของรูปภาพที่คุณต้องการให้แสดงใน Modal
+                  imageUrl="https://cdn.discordapp.com/attachments/1018437644222480394/1398928195746795552/3.png?ex=688724e8&is=6885d368&hm=82e7699682253662a5d6ea12de0d6ff8b3b347f54eb118d3320a125132d7fa34&" // URL ของรูปภาพที่คุณต้องการให้แสดงใน Modal
                   linkUrl="https://www.google.com" // URL ที่จะเปิดเมื่อคลิกรูปภาพ
-                  onClose={() => setShowWelcomeModal(false)}
+                  onClose={handleCloseWelcomeModal} // ใช้ฟังก์ชันปิดใหม่ที่บันทึกสถานะ
                 />
               )}
 
@@ -284,6 +335,13 @@
                   <p className="text-sm">โทรศัพท์: 082-881-4641 | อีเมล: oh.recycle@gmail.com</p>
                   <div className="mt-4">
                     <p className="text-xs">&copy; {new Date().getFullYear()} O-Recycle Limited Partnership. All rights reserved.</p>
+                    {/* New button to re-enable welcome modal */}
+                    <button
+                      onClick={handleReopenWelcomeModal}
+                      className="mt-2 text-green-300 hover:text-green-100 text-sm underline transition duration-200"
+                    >
+                      เปิด Popup ต้อนรับอีกครั้ง
+                    </button>
                   </div>
                   <p className="text-xs mt-2">User ID: {userId}</p>
                 </div>
@@ -291,7 +349,6 @@
             </div>
           );
         }
-
         // Home Page Component
         function HomePage({ showMessage, setCurrentPage }) {
           // Hardcoded slider images
