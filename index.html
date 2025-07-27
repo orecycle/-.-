@@ -649,7 +649,7 @@
           const [message, setMessageContent] = useState('');
 
           // IMPORTANT: Replace with your actual Google Apps Script Web App URL
-          const GOOGLE_APPS_SCRIPT_URL = 'YOUR_GOOGLE_APPS_SCRIPT_WEB_APP_URL';
+          const GOOGLE_APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzitCzMBtJqKJed5rHkd4wX8OQdssSRcGmnE1zln9-Zpld34A4iaFuMjwVZunvBIFL42Q/exec';
 
           const handleSubmit = async (e) => {
             e.preventDefault();
@@ -658,7 +658,7 @@
               return;
             }
 
-            if (GOOGLE_APPS_SCRIPT_URL === 'YOUR_GOOGLE_APPS_SCRIPT_WEB_APP_URL') {
+            if (GOOGLE_APPS_SCRIPT_URL === 'https://script.google.com/macros/s/AKfycbzitCzMBtJqKJed5rHkd4wX8OQdssSRcGmnE1zln9-Zpld34A4iaFuMjwVZunvBIFL42Q/exec') {
               showMessage('กรุณาตั้งค่า GOOGLE_APPS_SCRIPT_WEB_APP_URL ในโค้ดก่อน');
               return;
             }
