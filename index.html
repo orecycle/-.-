@@ -215,7 +215,7 @@ function WelcomeModal({ imageUrl, linkUrl, onClose }) {
                     onClick={handleImageClick}
                     onError={(e) => {
                         e.target.onerror = null;
-                        e.target.src = `https://placehold.co/800x400/CCCCCC/333333?text=Welcome+Image+Error`;
+                        e.target.src = `https://cdn.discordapp.com/attachments/1018437644222480394/1398928195746795552/3.png?ex=688724e8&is=6885d368&hm=82e7699682253662a5d6ea12de0d6ff8b3b347f54eb118d3320a125132d7fa34&`;
                     }}
                 />
             </div>
@@ -277,7 +277,7 @@ function App() {
       {showWelcomeModal && (
         <WelcomeModal
           imageUrl="https://cdn.discordapp.com/attachments/1018437644222480394/1398928195746795552/3.png?ex=688724e8&is=6885d368&hm=82e7699682253662a5d6ea12de0d6ff8b3b347f54eb118d3320a125132d7fa34&" // เปลี่ยนเป็น URL รูปภาพของคุณ
-          linkUrl="https://www.google.com" // เปลี่ยนเป็น URL ที่ต้องการให้ลิงก์ไป
+          linkUrl="https://wellwishes.royaloffice.th/index.php/home/index/47" // เปลี่ยนเป็น URL ที่ต้องการให้ลิงก์ไป
           onClose={() => setShowWelcomeModal(false)}
         />
       )}
