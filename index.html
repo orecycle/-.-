@@ -225,37 +225,29 @@
           const [currentPage, setCurrentPage] = useState('home');
           const [message, setMessage] = useState('');
           const [showMessageModal, setShowMessageModal] = useState(false);
-          // Initialize showWelcomeModal based on localStorage
-          const [showWelcomeModal, setShowWelcomeModal] = useState(
-            localStorage.getItem('welcomeModalClosed') !== 'true'
-          );
+          // Initialize showWelcomeModal to true so it always shows
+          const [showWelcomeModal, setShowWelcomeModal] = useState(true);
 
           const showMessage = (msg) => {
             setMessage(msg);
             setShowMessageModal(true);
           };
 
-          // Effect to show welcome modal after a short delay, only if not explicitly closed
+          // Effect to show welcome modal after a short delay
           useEffect(() => {
-            if (localStorage.getItem('welcomeModalClosed') !== 'true') {
-              const timer = setTimeout(() => {
-                setShowWelcomeModal(true);
-              }, 1000); // Show modal after 1 second
-              return () => clearTimeout(timer);
-            }
+            const timer = setTimeout(() => {
+              setShowWelcomeModal(true);
+            }, 1000); // Show modal after 1 second
+            return () => clearTimeout(timer);
           }, []);
 
-          // Function to handle closing the welcome modal
+          // Function to handle closing the welcome modal - now just hides it
           const handleCloseWelcomeModal = () => {
             setShowWelcomeModal(false);
-            localStorage.setItem('welcomeModalClosed', 'true'); // Mark as closed in localStorage
+            // Removed localStorage.setItem('welcomeModalClosed', 'true');
           };
 
-          // Function to re-enable the welcome modal (e.g., from a button in the footer)
-          const handleReopenWelcomeModal = () => {
-            localStorage.removeItem('welcomeModalClosed'); // Remove the closed flag
-            setShowWelcomeModal(true); // Show the modal immediately
-          };
+          // Removed handleReopenWelcomeModal as it's no longer needed
 
           // User ID is now just a placeholder as there's no real authentication
           const userId = 'local-user';
@@ -335,13 +327,7 @@
                   <p className="text-sm">โทรศัพท์: 082-881-4641 | อีเมล: oh.recycle@gmail.com</p>
                   <div className="mt-4">
                     <p className="text-xs">&copy; {new Date().getFullYear()} O-Recycle Limited Partnership. All rights reserved.</p>
-                    {/* New button to re-enable welcome modal */}
-                    <button
-                      onClick={handleReopenWelcomeModal}
-                      className="mt-2 text-green-300 hover:text-green-100 text-sm underline transition duration-200"
-                    >
-                      เปิด Popup ต้อนรับอีกครั้ง
-                    </button>
+                    {/* Removed the "เปิด Popup ต้อนรับอีกครั้ง" button */}
                   </div>
                   <p className="text-xs mt-2">User ID: {userId}</p>
                 </div>
