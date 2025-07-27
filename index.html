@@ -649,7 +649,7 @@
           const [message, setMessageContent] = useState('');
 
           // IMPORTANT: Replace with your actual Google Apps Script Web App URL
-          const GOOGLE_APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzitCzMBtJqKJed5rHkd4wX8OQdssSRcGmnE1zln9-Zpld34A4iaFuMjwVZunvBIFL42Q/exec';
+          const GOOGLE_APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzitCzMBtJqKJed5rHkd4wX8OQdssSRcGmnE1zln9-Zpld34A4iaFuMjwVZunvBIFL42Q/exec'; // Updated URL
 
           const handleSubmit = async (e) => {
             e.preventDefault();
@@ -658,10 +658,8 @@
               return;
             }
 
-            if (GOOGLE_APPS_SCRIPT_URL === 'https://script.google.com/macros/s/AKfycbzitCzMBtJqKJed5rHkd4wX8OQdssSRcGmnE1zln9-Zpld34A4iaFuMjwVZunvBIFL42Q/exec') {
-              showMessage('กรุณาตั้งค่า GOOGLE_APPS_SCRIPT_WEB_APP_URL ในโค้ดก่อน');
-              return;
-            }
+            // Log the URL to console for debugging
+            console.log("Attempting to send data to Google Apps Script URL:", GOOGLE_APPS_SCRIPT_URL);
 
             try {
               const formData = new FormData();
@@ -678,9 +676,15 @@
                 // No 'Content-Type' header needed for FormData, browser sets it automatically
               });
 
+              // Check if the response is OK (status 200-299)
+              if (!response.ok) {
+                const errorText = await response.text(); // Get response text for more details
+                throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`);
+              }
+
               const result = await response.json(); // Assuming Apps Script returns JSON
 
-              if (response.ok && result.status === 'success') {
+              if (result.status === 'success') {
                 showMessage('ส่งข้อความสำเร็จ! ข้อมูลถูกบันทึกใน Google Sheet แล้ว');
                 setName('');
                 setPhone('');
@@ -691,8 +695,8 @@
                 showMessage(`ส่งข้อความไม่สำเร็จ: ${result.message || 'เกิดข้อผิดพลาดที่ไม่ทราบสาเหตุ'}`);
               }
             } catch (error) {
-              console.error("Network or other error:", error);
-              showMessage(`เกิดข้อผิดพลาดในการเชื่อมต่อ: ${error.message}`);
+              console.error("Network or other error during fetch:", error);
+              showMessage(`เกิดข้อผิดพลาดในการเชื่อมต่อหรือการส่งข้อมูล: ${error.message}. โปรดตรวจสอบการตั้งค่า Google Apps Script ของคุณ (เช่น การอนุญาตการเข้าถึง 'Anyone, even anonymous' และการ Deploy เป็น Web App)`);
             }
           };
 
