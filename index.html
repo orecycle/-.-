@@ -233,50 +233,7 @@
             setShowMessageModal(true);
           };
 
-          // Effect to show welcome modal after a short delay
-          useEffect(() => {
-            const timer = setTimeout(() => {
-              setShowWelcomeModal(true);
-            }, 0); // Show modal after 1 second
-            return () => clearTimeout(timer);
-          }, []);
-
-          // Function to handle closing the welcome modal - now just hides it
-          const handleCloseWelcomeModal = () => {
-            setShowWelcomeModal(false);
-            // Removed localStorage.setItem('welcomeModalClosed', 'true');
-          };
-
-          // Removed handleReopenWelcomeModal as it's no longer needed
-
-          // User ID is now just a placeholder as there's no real authentication
-          const userId = 'local-user';
-
-          return (
-            <div className="min-h-screen bg-green-50 font-inter flex flex-col">
-              {/* Message Modal */}
-              {showMessageModal && (
-                <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-50">
-                  <div className="bg-white p-6 rounded-lg shadow-xl max-w-sm w-full text-center">
-                    <p className="text-lg mb-4">{message}</p>
-                    <button
-                      onClick={() => setShowMessageModal(false)}
-                      className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-md shadow-md transition duration-300 ease-in-out"
-                    >
-                      ตกลง
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {/* Welcome Modal */}
-              {showWelcomeModal && (
-                <WelcomeModal
-                  imageUrl="https://cdn.discordapp.com/attachments/1018437644222480394/1398928195746795552/3.png?ex=688724e8&is=6885d368&hm=82e7699682253662a5d6ea12de0d6ff8b3b347f54eb118d3320a125132d7fa34&" // URL ของรูปภาพที่คุณต้องการให้แสดงใน Modal
-                  linkUrl="https://wellwishes.royaloffice.th/index.php/home/index/47" // URL ที่จะเปิดเมื่อคลิกรูปภาพ
-                  onClose={handleCloseWelcomeModal} // ใช้ฟังก์ชันปิดใหม่ที่บันทึกสถานะ
-                />
-              )}
+          
 
               {/* Header Section */}
               <header className="bg-green-800 text-white p-4 shadow-md">
@@ -409,7 +366,7 @@
               </section>
 
               {/* Image Slider Section - Enhanced Styling */}
-            <section className="relative w-full overflow-hidden rounded-lg shadow-xl bg-gray-100 min-h-[250px] md:min-h-[450px] flex items-center justify-center border border-green-200">
+            <section className="relative w-full overflow-hidden rounded-lg shadow-xl bg-gray-100 min-h-[200px] md:min-h-[600px] flex items-center justify-center border border-green-200">
                 <h2 className="absolute top-4 left-1/2 -translate-x-1/2 text-2xl font-bold text-green-700 z-20 bg-white px-4 py-2 rounded-lg shadow-md">
                  
                 </h2>
