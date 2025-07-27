@@ -237,7 +237,7 @@
           useEffect(() => {
             const timer = setTimeout(() => {
               setShowWelcomeModal(true);
-            }, 1000); // Show modal after 1 second
+            }, 0); // Show modal after 1 second
             return () => clearTimeout(timer);
           }, []);
 
