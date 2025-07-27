@@ -184,109 +184,27 @@
                 <line x1="17.5" x2="17.5" y1="6.5" y2="6.5"/>
             </svg>
         );
-    // Welcome Modal Component
-function WelcomeModal({ imageUrl, linkUrl, onClose }) {
-    const handleImageClick = () => {
-        if (linkUrl) {
-            window.open(linkUrl, '_blank'); // Open link in new tab
-        }
-    };
-
-    return (
-        <div className="fixed inset-0 bg-gray-600 bg-opacity-75 flex items-center justify-center p-4 z-50">
-            <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full relative overflow-hidden">
-                {/* Close button */}
-                <button
-                    onClick={onClose}
-                    className="absolute top-3 right-3 text-gray-500 hover:text-gray-800 transition z-10 bg-white rounded-full p-1"
-                >
-                    {/* Icon for close button (X) */}
-                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-x-circle">
-                        <circle cx="12" cy="12" r="10"/>
-                        <path d="m15 9-6 6"/>
-                        <path d="m9 9 6 6"/>
-                    </svg>
-                </button>
-                {/* Image */}
-                <img
-                    src={imageUrl}
-                    alt="Welcome Promotion"
-                    className="w-full h-auto object-cover cursor-pointer"
-                    onClick={handleImageClick}
-                    onError={(e) => {
-                        e.target.onerror = null;
-                        e.target.src = `https://cdn.discordapp.com/attachments/1018437644222480394/1398928195746795552/3.png?ex=688724e8&is=6885d368&hm=82e7699682253662a5d6ea12de0d6ff8b3b347f54eb118d3320a125132d7fa34&`;
-                    }}
-                />
-            </div>
-        </div>
-    );
-}
+    
 
         // Main App Component
         function App() {
           const [currentPage, setCurrentPage] = useState('home');
           const [message, setMessage] = useState('');
           const [showMessageModal, setShowMessageModal] = useState(false);
+          const [showWelcomeModal, setShowWelcomeModal] = useState(true); // State to control welcome modal visibility
 
           const showMessage = (msg) => {
             setMessage(msg);
             setShowMessageModal(true);
           };
-            // ในส่วนของ function App() { ... }
-function App() {
-  const [currentPage, setCurrentPage] = useState('home');
-  const [message, setMessage] = useState('');
-  const [showMessageModal, setShowMessageModal] = useState(false);
-  const [showWelcomeModal, setShowWelcomeModal] = useState(true); // เพิ่ม state นี้
 
-  const showMessage = (msg) => {
-    setMessage(msg);
-    setShowMessageModal(true);
-  };
-
-  // เพิ่ม useEffect นี้เพื่อตั้งค่าให้ Modal แสดงขึ้นมาเมื่อโหลดหน้าเว็บ
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setShowWelcomeModal(true);
-    }, 1000); // แสดง Modal หลังจาก 1 วินาที
-    return () => clearTimeout(timer);
-  }, []);
-
-  // User ID is now just a placeholder as there's no real authentication
-  const userId = 'local-user';
-
-  return (
-    <div className="min-h-screen bg-green-50 font-inter flex flex-col">
-      {/* Message Modal */}
-      {showMessageModal && (
-        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white p-6 rounded-lg shadow-xl max-w-sm w-full text-center">
-            <p className="text-lg mb-4">{message}</p>
-            <button
-              onClick={() => setShowMessageModal(false)}
-              className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-md shadow-md transition duration-300 ease-in-out"
-            >
-              ตกลง
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Welcome Modal - วางโค้ดนี้ตรงนี้ครับ */}
-      {showWelcomeModal && (
-        <WelcomeModal
-          imageUrl="https://cdn.discordapp.com/attachments/1018437644222480394/1398928195746795552/3.png?ex=688724e8&is=6885d368&hm=82e7699682253662a5d6ea12de0d6ff8b3b347f54eb118d3320a125132d7fa34&" // เปลี่ยนเป็น URL รูปภาพของคุณ
-          linkUrl="https://wellwishes.royaloffice.th/index.php/home/index/47" // เปลี่ยนเป็น URL ที่ต้องการให้ลิงก์ไป
-          onClose={() => setShowWelcomeModal(false)}
-        />
-      )}
-
-      {/* Header Section */}
-      {/* ... โค้ดส่วนที่เหลือของ Header, Main, Footer ... */}
-    </div>
-  );
-}
+          // Effect to show welcome modal after a short delay
+          useEffect(() => {
+            const timer = setTimeout(() => {
+              setShowWelcomeModal(true);
+            }, 1000); // Show modal after 1 second
+            return () => clearTimeout(timer);
+          }, []);
 
           // User ID is now just a placeholder as there's no real authentication
           const userId = 'local-user';
@@ -306,6 +224,15 @@ function App() {
                     </button>
                   </div>
                 </div>
+              )}
+
+              {/* Welcome Modal */}
+              {showWelcomeModal && (
+                <WelcomeModal
+                  imageUrl="http://googleusercontent.com/file_content/1" // URL ของรูปภาพที่คุณต้องการให้แสดงใน Modal
+                  linkUrl="https://www.google.com" // URL ที่จะเปิดเมื่อคลิกรูปภาพ
+                  onClose={() => setShowWelcomeModal(false)}
+                />
               )}
 
               {/* Header Section */}
